@@ -13,6 +13,7 @@ mod Betting {
     const YES: u8 = 1_u8;
     const NO: u8 = 0_u8;
 
+    //Here we use user address as a Key to retrieve bets
     #[storage]
     struct Storage {
         bets: LegacyMap::<ContractAddress, (u8, u128)>,
@@ -26,24 +27,18 @@ mod Betting {
             assert!(bet == NO || bet == YES, "BET_0_OR_1");
             let caller: ContractAddress = get_caller_address();
             self.bets.write(caller, (bet, amount));
+            if bet == YES {
+                self.yes_count += 1;
+            } else {
+                self.no_count += 1;
+            }
+            self.emit(BetPlaced { user: caller, amount: amount });
         }
 
         fn get_bet(self: @ContractState, user_address: ContractAddress) -> (u8, u128) {
             self.bets.read(user_address)
         }
     }
-}
-
-#[derive(starknet::Store)]
-enum Bet {
-  None,
-  Yes,
-  No,
-}
-
-#[derive(starknet::Store)]
-struct bet_amount {
-  amount: felt252,
 }
 
 //function to get the bet output per address, so Yes or No for each user
@@ -62,10 +57,15 @@ fn get_rate_and_amount_per_address(storage: Store<Storage>) -> (felt252, felt252
 }
 
 //emit an event each time a bet is placed in order to get latest info and refresh rate on App
+#[derive(Drop, starknet::Event)]
+struct BetPlaced {
+    #[key]
+    user: ContractAddress,
+    amount: felt252,
+}
+
 #[event]
 #[derive(Drop, starknet::Event)]
 enum Event {
-  BetPlaced,
-  BetOutput,
+    BetPlaced: BetPlaced,
 }
-
