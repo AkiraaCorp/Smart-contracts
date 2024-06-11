@@ -16,13 +16,23 @@ pub trait INameRegistry<TContractState> {
 mod NameRegistry {
     use starknet::{ContractAddress, get_caller_address, storage_access::StorageBaseAddress};
 
+    // for the rate
+    type odds = u8;
+
+    #[derive(starknet::Store)]
+    enum Vote {
+      None,
+      Yes: odds,
+      No: odds,
+    }
+
     #[storage]
     struct Storage {
         names: LegacyMap::<ContractAddress, felt252>,
         owner: Person,
         registration_type: LegacyMap::<ContractAddress, RegistrationType>,
         total_names: u128,
-        bets: LegacyMap::<ContractAddress, (u8, u128)>,
+        bets: LegacyMap<(ContractAddress, Vote), u256>,
         yes_count: u128,
         no_count: u128,
     }
