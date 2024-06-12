@@ -19,7 +19,7 @@ mod NameRegistry {
     // for the rate
     type odds = u8;
 
-    #[derive(starknet::Store)]
+    #[derive(Drop, Copy, Serde, starknet::Store)]
     pub enum Vote {
       None,
       Yes: odds,
@@ -33,7 +33,7 @@ mod NameRegistry {
         registration_type: LegacyMap::<ContractAddress, RegistrationType>,
         total_names: u128,
         bets: LegacyMap<(ContractAddress, Vote), u256>,
-        user_votes: LegacyMap<ContractAddress, Vote>,  // New storage map
+        user_votes: LegacyMap<ContractAddress, Vote>,
         yes_count: u128,
         no_count: u128,
     }
@@ -96,14 +96,18 @@ mod NameRegistry {
         fn place_bet(ref self: ContractState, bet: Vote, amount: u256) {
             let caller: ContractAddress = get_caller_address();
             self.bets.write((caller, bet), amount);
-            self.user_votes.write(caller, bet);  // Store the vote separately
+            self.user_votes.write(caller, bet);
 
-            if bet == Vote::Yes {
-                let yes_count = self.yes_count.read();
-                self.yes_count.write(yes_count + 1);
-            } else {
-                let no_count = self.no_count.read();
-                self.no_count.write(no_count + 1);
+            match bet {
+                Vote::Yes => {
+                    let yes_count = self.yes_count.read();
+                    self.yes_count.write(yes_count + 1);
+                },
+                Vote::No => {
+                    let no_count = self.no_count.read();
+                    self.no_count.write(no_count + 1);
+                },
+                _ => {}
             }
 
             self.emit(BetPlaced { user: caller, amount: amount });
@@ -111,7 +115,7 @@ mod NameRegistry {
 
         fn get_bet(self: @ContractState, user_address: ContractAddress) -> (Vote, u256) {
             let vote = self.user_votes.read(user_address);
-            let amount = self.bets.read((user_address, vote));
+            let amount = self.bets.read((user_address, vote.clone()));
             (vote, amount)
         }
     }
