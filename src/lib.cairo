@@ -2,18 +2,18 @@
 use starknet::ContractAddress;
 
 #[starknet::interface]
-pub trait INameRegistry<TContractState> {
+pub trait IEventBetting<TContractState> {
     fn store_name(
-        ref self: TContractState, name: felt252, registration_type: NameRegistry::RegistrationType
+        ref self: TContractState, name: felt252, registration_type: EventBetting::RegistrationType
     );
     fn get_name(self: @TContractState, address: ContractAddress) -> felt252;
-    fn get_owner(self: @TContractState) -> NameRegistry::Person;
-    fn place_bet(ref self: TContractState, bet: NameRegistry::Vote, amount: u256);
-    fn get_bet(self: @TContractState, user_address: ContractAddress) -> (NameRegistry::Vote, u256);
+    fn get_owner(self: @TContractState) -> EventBetting::Person;
+    fn place_bet(ref self: TContractState, bet: EventBetting::Vote, amount: u256);
+    fn get_bet(self: @TContractState, user_address: ContractAddress) -> (EventBetting::Vote, u256);
 }
 
 #[starknet::contract]
-mod NameRegistry {
+mod EventBetting {
     use starknet::{ContractAddress, get_caller_address, storage_access::StorageBaseAddress};
 
     // for the rate
@@ -79,7 +79,7 @@ mod NameRegistry {
     }
 
     #[abi(embed_v0)]
-    impl NameRegistry of super::INameRegistry<ContractState> {
+    impl EventBetting of super::IEventBetting<ContractState> {
         fn store_name(ref self: ContractState, name: felt252, registration_type: RegistrationType) {
             let caller = get_caller_address();
             self._store_name(caller, name, registration_type);
