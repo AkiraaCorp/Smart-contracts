@@ -145,5 +145,3 @@ mod EventBetting {
         self.owner.address()
     }
 }
-
-/// Do the function that refresh quotation rate after each bet
