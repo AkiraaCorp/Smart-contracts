@@ -4,12 +4,13 @@
 pub mod odds_compute {
     use core::starknet::contract_address::ContractAddress;
 
+    #[storage]
     struct BetState {
         total_yes: u128,
         total_no: u128,
     }
 
-    pub fn refresh_odds(bet_state: &mut BetState, amount: u128, bet_on_yes: bool) -> (f64, f64) {
+    pub fn refresh_odds(ref self: ContractState, amount: u128, bet_on_yes: bool) -> (f64, f64) {
         if bet_on_yes {
             bet_state.total_yes += amount;
         } else {
