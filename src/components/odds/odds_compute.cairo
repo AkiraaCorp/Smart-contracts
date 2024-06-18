@@ -1,7 +1,7 @@
 /// Do the function that initialize and refresh quotation rate after each bet
 
 #[starknet::component]
-pub mod odds_compute {
+pub mod odds_computeComponent {
     use core::starknet::contract_address::ContractAddress;
 
     #[storage]
@@ -18,8 +18,8 @@ pub mod odds_compute {
         }
 
         let total_bets = bet_state.total_yes + bet_state.total_no;
-        let prob_yes = bet_state.total_yes as f64 / total_bets as f64;
-        let prob_no = bet_state.total_no as f64 / total_bets as f64;
+        let prob_yes = bet_state.total_yes / total_bets;
+        let prob_no = bet_state.total_no / total_bets;
 
         // Here we use an overhound of 10%, so 1.10
         let overround = 1.10;
