@@ -1,1 +1,1 @@
-pub mod odds;
+pub mod odds_compute;

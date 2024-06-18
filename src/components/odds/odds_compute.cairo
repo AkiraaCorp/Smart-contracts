@@ -10,7 +10,11 @@ pub mod odds_computeComponent {
         total_no: u128,
     }
 
-    pub fn refresh_odds(ref self: ContractState, amount: u128, bet_on_yes: bool) -> (f64, f64) {
+    #[embeddable_as(OddsCompute)]
+    impl OddsComputeImpl< TContractState, +HasComponent<TContractState>
+    > of super::IOddsCompute<ComponentState<TContractState>> {
+
+    fn refresh_odds(ref self: ContractState, amount: u128, bet_on_yes: bool) -> (f64, f64) {
         if bet_on_yes {
             bet_state.total_yes += amount;
         } else {
@@ -28,4 +32,5 @@ pub mod odds_computeComponent {
 
         (odds_yes, odds_no)
     }
+}
 }

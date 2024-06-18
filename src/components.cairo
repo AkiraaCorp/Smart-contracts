@@ -1,3 +1,3 @@
-pub mod odds_compute;
+mod odds;
 
 pub use odds::odds_compute::odds_computeComponent;
