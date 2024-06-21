@@ -1,36 +1,40 @@
 /// Do the function that initialize and refresh quotation rate after each bet
 
 #[starknet::component]
-pub mod odds_computeComponent {
+pub mod OddsComputeComponent {
     use core::starknet::contract_address::ContractAddress;
+    use starknet::{get_caller_address, get_contract_address};
 
     #[storage]
-    struct BetState {
+    pub struct Storage {
         total_yes: u128,
         total_no: u128,
     }
 
-    #[embeddable_as(OddsCompute)]
-    impl OddsComputeImpl< TContractState, +HasComponent<TContractState>
-    > of super::IOddsCompute<ComponentState<TContractState>> {
-
-    fn refresh_odds(ref self: ContractState, amount: u128, bet_on_yes: bool) -> (f64, f64) {
-        if bet_on_yes {
-            bet_state.total_yes += amount;
-        } else {
-            bet_state.total_no += amount;
-        }
-
-        let total_bets = bet_state.total_yes + bet_state.total_no;
-        let prob_yes = bet_state.total_yes / total_bets;
-        let prob_no = bet_state.total_no / total_bets;
-
-        // Here we use an overhound of 10%, so 1.10
-        let overround = 1.10;
-        let odds_yes = overround / prob_yes;
-        let odds_no = overround / prob_no;
-
-        (odds_yes, odds_no)
+    #[starknet::interface]
+    trait OddsComputeTrait<TContractState> {
+        fn odds_refresh(ref self: TContractState, amount: u128, bet_on_yes: bool);
     }
-}
+
+    #[embeddable_as(OddsComputeImpl)]
+    impl OddsComputeExternal<
+        TContractState, +Drop<TContractState>, +HasComponent<TContractState>
+    > of OddsComputeTrait<ComponentState<TContractState>> {
+        fn odds_refresh(ref self: ComponentState<TContractState>, amount: u128, bet_on_yes: bool) {
+            if bet_on_yes {
+                self.total_yes += amount;
+            } else {
+                self.total_no += amount;
+            }
+        
+            let total_bets = self.total_yes + self.total_no;
+            let prob_yes = self.total_yes / total_bets;
+            let prob_no = self.total_no / total_bets;
+        
+            // Here we use an overhound of 10%, so 1.10
+            let overround = 1.10;
+            let odds_yes = overround / prob_yes;
+            let odds_no = overround / prob_no;
+        }
+    }
 }

@@ -1,0 +1,1 @@
+///Owner function to freeze, adjust odds 
