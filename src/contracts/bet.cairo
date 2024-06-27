@@ -1,5 +1,6 @@
 //define a constructor and an the contract blueprint first here
 use starknet::ContractAddress;
+use core::hash::Hash;
 
 #[starknet::interface]
 pub trait IEventBetting<TContractState> {
@@ -32,11 +33,13 @@ pub mod EventBetting {
         owner: Person,
         registration_type: LegacyMap::<ContractAddress, RegistrationType>,
         total_names: u128,
-        bets: LegacyMap<(ContractAddress, Vote), u256>,
+        bets: LegacyMap<ContractAddress, (Vote, u256)>,
         user_votes: LegacyMap<ContractAddress, Vote>,
         yes_count: u128,
         no_count: u128,
     }
+
+   
 
     #[event]
     #[derive(Drop, starknet::Event)]
@@ -95,7 +98,7 @@ pub mod EventBetting {
 
         fn place_bet(ref self: ContractState, bet: Vote, amount: u256) {
             let caller: ContractAddress = get_caller_address();
-            self.bets.write((caller, bet), amount);
+            self.bets.write(caller, (bet, amount));
             self.user_votes.write(caller, bet);
 
             match bet {
@@ -114,9 +117,9 @@ pub mod EventBetting {
         }
 
         fn get_bet(self: @ContractState, user_address: ContractAddress) -> (Vote, u256) {
-            let vote = self.user_votes.read(user_address);
-            let amount = self.bets.read((user_address, vote.clone()));
-            (vote, amount)
+            let vote = self.bets.read(user_address);
+            let (odds, amount) = vote;
+            (odds, amount)
         }
     }
 
