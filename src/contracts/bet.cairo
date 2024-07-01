@@ -1,6 +1,6 @@
+use core::hash::Hash;
 //define a constructor and an the contract blueprint first here
 use starknet::ContractAddress;
-use core::hash::Hash;
 
 #[starknet::interface]
 pub trait IEventBetting<TContractState> {
@@ -22,9 +22,9 @@ pub mod EventBetting {
 
     #[derive(Drop, Copy, Serde, starknet::Store)]
     pub enum Vote {
-      None,
-      Yes: odds,
-      No: odds,
+        None,
+        Yes: odds,
+        No: odds,
     }
 
     #[storage]
@@ -39,7 +39,6 @@ pub mod EventBetting {
         no_count: u128,
     }
 
-   
 
     #[event]
     #[derive(Drop, starknet::Event)]
