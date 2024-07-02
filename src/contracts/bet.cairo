@@ -14,6 +14,7 @@ pub trait IEventBetting<TContractState> {
     fn get_event_outcome(self: @TContractState) -> u8;
     fn get_shares_token_address(self: @TContractState) -> (ContractAddress, ContractAddress);
     fn get_is_active(self: @TContractState) -> bool;
+    fn set_is_active(ref self: TContractState, is_active: bool);
     fn get_time_expiration(self: @TContractState) -> u256;
     fn get_all_bets(self: @TContractState) -> LegacyMap<ContractAddress, EventBetting::UserBet>;
     fn get_bet_per_user(self: @TContractState, user_address: ContractAddress) -> EventBetting::UserBet;
@@ -38,7 +39,7 @@ pub mod EventBetting {
 
     #[storage]
     struct Storage {
-        names: LegacyMap::<ContractAddress, felt252>,
+        name: felt252,
         owner: Person,
         total_names: u128,
         bets: LegacyMap<ContractAddress, UserBet>,
@@ -96,38 +97,43 @@ pub mod EventBetting {
         }
 
         fn get_name(self: @ContractState, address: ContractAddress) -> felt252 {
-            self.names.read(address)
+            self.name.read()
         }
 
         fn get_owner(self: @ContractState) -> Person {
             self.owner.read()
         }
 
-        fn place_bet(ref self: TContractState, bet: EventBetting::UserBet) {
+        fn place_bet(ref self: ContractState, bet: UserBet) {
 
         }
-        fn get_bet(self: @TContractState, user_address: ContractAddress) -> (u8, u256) {
+        fn get_bet(self: @ContractState, user_address: ContractAddress) -> (u8, u256) {
 
         }
-        fn get_event_outcome(self: @TContractState) -> u8 {
+        fn get_event_outcome(self: @ContractState) -> u8 {
 
         }
-        fn get_shares_token_address(self: @TContractState) -> (ContractAddress, ContractAddress) {
+        fn get_shares_token_address(self: @ContractState) -> (ContractAddress, ContractAddress) {
 
         }
-        fn get_is_active(self: @TContractState) -> bool {
+        fn get_is_active(self: @ContractState) -> bool {
 
         }
-        fn get_time_expiration(self: @TContractState) -> u256 {
+
+        fn set_is_active(ref self: ContractState, is_active: bool) {
 
         }
-        fn get_all_bets(self: @TContractState) -> LegacyMap<ContractAddress, EventBetting::UserBet> {
+
+        fn get_time_expiration(self: @ContractState) -> u256 {
 
         }
-        fn get_bet_per_user(self: @TContractState, user_address: ContractAddress) -> EventBetting::UserBet {
+        fn get_all_bets(self: @ContractState) -> LegacyMap<ContractAddress, UserBet> {
 
         }
-        fn get_total_bet_bank(self: @TContractState) -> u256 {
+        fn get_bet_per_user(self: @ContractState, user_address: ContractAddress) -> UserBet {
+
+        }
+        fn get_total_bet_bank(self: @ContractState) -> u256 {
 
         }
         
