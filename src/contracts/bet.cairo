@@ -31,14 +31,22 @@ pub mod EventBetting {
     struct Storage {
         names: LegacyMap::<ContractAddress, felt252>,
         owner: Person,
-        registration_type: LegacyMap::<ContractAddress, RegistrationType>,
         total_names: u128,
-        bets: LegacyMap<ContractAddress, (Vote, u256)>,
-        user_votes: LegacyMap<ContractAddress, Vote>,
+        bets: LegacyMap<ContractAddress, UserBet>,
         yes_count: u128,
         no_count: u128,
+        is_active: bool,
+        time_expiration: u256,
+        shares_token_address: (ContractAddress, ContractAddress),
     }
 
+    #[derive(Drop, Serde, starknet::Store)]
+    pub struct UserBet {
+        bet: u8, ///No = 0, Yes = 1
+        amount: u256,
+        has_claimed: bool,
+        claimable_amount: u256,
+    }
 
     #[event]
     #[derive(Drop, starknet::Event)]
@@ -111,7 +119,7 @@ pub mod EventBetting {
                 },
                 _ => {}
             }
-
+            
             self.emit(BetPlaced { user: caller, amount: amount });
         }
 
