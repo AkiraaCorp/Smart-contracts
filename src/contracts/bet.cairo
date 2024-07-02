@@ -11,13 +11,18 @@ pub trait IEventBetting<TContractState> {
     fn get_owner(self: @TContractState) -> EventBetting::Person;
     fn place_bet(ref self: TContractState, bet: EventBetting::UserBet);
     fn get_bet(self: @TContractState, user_address: ContractAddress) -> (u8, u256);
-    fn refresh_odds(ref self: TContractState, event_probability: (u256, u256));
     fn get_event_outcome(self: @TContractState) -> u8;
     fn get_shares_token_address(self: @TContractState) -> (ContractAddress, ContractAddress);
     fn get_is_active(self: @TContractState) -> bool;
     fn get_time_expiration(self: @TContractState) -> u256;
     fn get_all_bets(self: @TContractState) -> LegacyMap<ContractAddress, EventBetting::UserBet>;
     fn get_bet_per_user(self: @TContractState, user_address: ContractAddress) -> EventBetting::UserBet;
+}
+
+pub trait IEventBettingImpl<TContractState> {
+    fn bet_is_over(self: @TContractState) -> bool;
+
+    fn refresh_odds(self: @TContractState, odds: EventBetting::Odds) -> u256;
 }
 
 #[starknet::contract]
@@ -30,7 +35,7 @@ pub mod EventBetting {
         owner: Person,
         total_names: u128,
         bets: LegacyMap<ContractAddress, UserBet>,
-        event_probability: (u256, u256),
+        event_probability: Odds,
         yes_count: u128,
         no_count: u128,
         event_outcome: u8, ///No = 0, Yes = 1 or 2 if event got no outcome yet
@@ -45,6 +50,12 @@ pub mod EventBetting {
         amount: u256,
         has_claimed: bool,
         claimable_amount: u256,
+    }
+
+    #[derive(Drop, Serde, starknet::Store)]
+    pub struct Odds {
+        no_probability: u256,
+        yes_probability: u256,
     }
 
     #[derive(Drop, Serde, starknet::Store)]
@@ -84,30 +95,5 @@ pub mod EventBetting {
         }
 
         
-    }
-
-    #[external(v0)]
-    fn get_contract_name(self: @ContractState) -> felt252 {
-        'Event number 1'
-    }
-
-    #[generate_trait]
-    impl InternalFunctions of InternalFunctionsTrait {
-        fn _store_name(
-            ref self: ContractState,
-            user: ContractAddress,
-            name: felt252,
-            registration_type: RegistrationType
-        ) {
-            let total_names = self.total_names.read();
-            self.names.write(user, name);
-            self.registration_type.write(user, registration_type);
-            self.total_names.write(total_names + 1);
-            self.emit(StoredName { user: user, name: name });
-        }
-    }
-
-    fn get_owner_storage_address(self: @ContractState) -> StorageBaseAddress {
-        self.owner.address()
     }
 }
