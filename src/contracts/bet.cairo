@@ -9,23 +9,20 @@ pub trait IEventBetting<TContractState> {
     );
     fn get_name(self: @TContractState, address: ContractAddress) -> felt252;
     fn get_owner(self: @TContractState) -> EventBetting::Person;
-    fn place_bet(ref self: TContractState, bet: EventBetting::Vote, amount: u256);
-    fn get_bet(self: @TContractState, user_address: ContractAddress) -> (EventBetting::Vote, u256);
+    fn place_bet(ref self: TContractState, bet: EventBetting::UserBet);
+    fn get_bet(self: @TContractState, user_address: ContractAddress) -> (u8, u256);
+    fn refresh_odds(ref self: TContractState, event_probability: (u256, u256));
+    fn get_event_outcome(self: @TContractState) -> u8;
+    fn get_shares_token_address(self: @TContractState) -> (ContractAddress, ContractAddress);
+    fn get_is_active(self: @TContractState) -> bool;
+    fn get_time_expiration(self: @TContractState) -> u256;
+    fn get_all_bets(self: @TContractState) -> LegacyMap<ContractAddress, EventBetting::UserBet>;
+    fn get_bet_per_user(self: @TContractState, user_address: ContractAddress) -> EventBetting::UserBet;
 }
 
 #[starknet::contract]
 pub mod EventBetting {
     use starknet::{ContractAddress, get_caller_address, storage_access::StorageBaseAddress};
-
-    // for the rate
-    type odds = u8;
-
-    #[derive(Drop, Copy, Serde, starknet::Store)]
-    pub enum Vote {
-        None,
-        Yes: odds,
-        No: odds,
-    }
 
     #[storage]
     struct Storage {
@@ -33,11 +30,13 @@ pub mod EventBetting {
         owner: Person,
         total_names: u128,
         bets: LegacyMap<ContractAddress, UserBet>,
+        event_probability: (u256, u256),
         yes_count: u128,
         no_count: u128,
+        event_outcome: u8, ///No = 0, Yes = 1 or 2 if event got no outcome yet
         is_active: bool,
         time_expiration: u256,
-        shares_token_address: (ContractAddress, ContractAddress),
+        shares_token_address: (ContractAddress, ContractAddress), ///First for the NO token address, second for the YES token address
     }
 
     #[derive(Drop, Serde, starknet::Store)]
@@ -46,27 +45,6 @@ pub mod EventBetting {
         amount: u256,
         has_claimed: bool,
         claimable_amount: u256,
-    }
-
-    #[event]
-    #[derive(Drop, starknet::Event)]
-    enum Event {
-        StoredName: StoredName,
-        BetPlaced: BetPlaced,
-    }
-
-    #[derive(Drop, starknet::Event)]
-    struct StoredName {
-        #[key]
-        user: ContractAddress,
-        name: felt252,
-    }
-
-    #[derive(Drop, starknet::Event)]
-    struct BetPlaced {
-        #[key]
-        user: ContractAddress,
-        amount: u256,
     }
 
     #[derive(Drop, Serde, starknet::Store)]
@@ -88,6 +66,8 @@ pub mod EventBetting {
         self.owner.write(owner);
     }
 
+    ///ici faire la fonction qui créer les 2 tokens NO et Yes pour le bet concerné
+
     #[abi(embed_v0)]
     impl EventBetting of super::IEventBetting<ContractState> {
         fn store_name(ref self: ContractState, name: felt252, registration_type: RegistrationType) {
@@ -103,31 +83,7 @@ pub mod EventBetting {
             self.owner.read()
         }
 
-        fn place_bet(ref self: ContractState, bet: Vote, amount: u256) {
-            let caller: ContractAddress = get_caller_address();
-            self.bets.write(caller, (bet, amount));
-            self.user_votes.write(caller, bet);
-
-            match bet {
-                Vote::Yes => {
-                    let yes_count = self.yes_count.read();
-                    self.yes_count.write(yes_count + 1);
-                },
-                Vote::No => {
-                    let no_count = self.no_count.read();
-                    self.no_count.write(no_count + 1);
-                },
-                _ => {}
-            }
-            
-            self.emit(BetPlaced { user: caller, amount: amount });
-        }
-
-        fn get_bet(self: @ContractState, user_address: ContractAddress) -> (Vote, u256) {
-            let vote = self.bets.read(user_address);
-            let (odds, amount) = vote;
-            (odds, amount)
-        }
+        
     }
 
     #[external(v0)]
