@@ -2,22 +2,22 @@ use core::hash::Hash;
 //define a constructor and an the contract blueprint first here
 use starknet::ContractAddress;
 
+
 #[starknet::interface]
 pub trait IEventBetting<TContractState> {
-    fn store_name(
-        ref self: TContractState, name: felt252, registration_type: EventBetting::RegistrationType
-    );
+    fn store_name(ref self: TContractState, name: felt252);
     fn get_name(self: @TContractState, address: ContractAddress) -> felt252;
-    fn get_owner(self: @TContractState) -> EventBetting::Person;
+    fn get_owner(self: @TContractState) -> ContractAddress;
     fn place_bet(ref self: TContractState, bet: EventBetting::UserBet);
-    fn get_bet(self: @TContractState, user_address: ContractAddress) -> (u8, u256);
+    fn get_bet(self: @TContractState, user_address: ContractAddress) -> EventBetting::UserBet;
     fn get_event_outcome(self: @TContractState) -> u8;
     fn get_shares_token_address(self: @TContractState) -> (ContractAddress, ContractAddress);
     fn get_is_active(self: @TContractState) -> bool;
     fn set_is_active(ref self: TContractState, is_active: bool);
     fn get_time_expiration(self: @TContractState) -> u256;
-    fn get_all_bets(self: @TContractState) -> LegacyMap<ContractAddress, EventBetting::UserBet>;
-    fn get_bet_per_user(self: @TContractState, user_address: ContractAddress) -> EventBetting::UserBet;
+    fn set_time_expiration(ref self: TContractState, time_expiration: u256);
+    fn get_all_bets(self: @TContractState) -> Array<EventBetting::UserBet>;
+    fn get_bet_per_user(self: @TContractState, user_address: ContractAddress) -> Array<EventBetting::UserBet>;
     fn get_total_bet_bank(self: @TContractState) -> u256;
 }
 
@@ -40,7 +40,7 @@ pub mod EventBetting {
     #[storage]
     struct Storage {
         name: felt252,
-        owner: Person,
+        owner: ContractAddress,
         total_names: u128,
         bets: LegacyMap<ContractAddress, UserBet>,
         event_probability: Odds,
@@ -69,21 +69,14 @@ pub mod EventBetting {
     }
 
     #[derive(Drop, Serde, starknet::Store)]
-    pub struct Person {
-        address: ContractAddress,
-        name: felt252,
-    }
-
-    #[derive(Drop, Serde, starknet::Store)]
     pub enum RegistrationType {
         finite: u64,
         infinite
     }
 
     #[constructor]
-    fn constructor(ref self: ContractState, owner: Person) {
-        self.names.write(owner.address, owner.name);
-        self.total_names.write(1);
+    fn constructor(ref self: ContractState, owner: ContractAddress) {
+        ///remplir avec tout les params du storage
         self.owner.write(owner);
     }
 
@@ -91,50 +84,79 @@ pub mod EventBetting {
 
     #[abi(embed_v0)]
     impl EventBetting of super::IEventBetting<ContractState> {
-        fn store_name(ref self: ContractState, name: felt252, registration_type: RegistrationType) {
-            let caller = get_caller_address();
-            self._store_name(caller, name, registration_type);
+        fn store_name(ref self: ContractState, name: felt252) {
+            assert(get_caller_address() == self.owner.read(), 'Only owner can do that');
+            self.name.write(name);
         }
 
         fn get_name(self: @ContractState, address: ContractAddress) -> felt252 {
             self.name.read()
         }
 
-        fn get_owner(self: @ContractState) -> Person {
+        fn get_owner(self: @ContractState) -> ContractAddress {
             self.owner.read()
         }
 
         fn place_bet(ref self: ContractState, bet: UserBet) {
 
         }
-        fn get_bet(self: @ContractState, user_address: ContractAddress) -> (u8, u256) {
 
+        fn get_bet(self: @ContractState, user_address: ContractAddress) -> UserBet {
+            self.bets.read(user_address)
         }
+
         fn get_event_outcome(self: @ContractState) -> u8 {
-
+            self.event_outcome.read()
         }
-        fn get_shares_token_address(self: @ContractState) -> (ContractAddress, ContractAddress) {
 
+        fn get_shares_token_address(self: @ContractState) -> (ContractAddress, ContractAddress) {
+            self.shares_token_address.read()
         }
         fn get_is_active(self: @ContractState) -> bool {
-
+            self.is_active.read()
         }
 
         fn set_is_active(ref self: ContractState, is_active: bool) {
-
+            assert(get_caller_address() == self.owner.read(), 'Only owner can do that');
+            self.is_active.write(is_active);
         }
 
         fn get_time_expiration(self: @ContractState) -> u256 {
-
+            self.time_expiration.read()
         }
-        fn get_all_bets(self: @ContractState) -> LegacyMap<ContractAddress, UserBet> {
 
+        fn set_time_expiration(ref self: ContractState, time_expiration: u256) {
+            assert(get_caller_address() == self.owner.read(), 'Only owner can do that');
+            self.time_expiration.write(time_expiration);
         }
-        fn get_bet_per_user(self: @ContractState, user_address: ContractAddress) -> UserBet {
 
+        fn get_all_bets(self: @ContractState) -> Array<UserBet> {
+            let mut bets: Array<UserBet> = ArrayTrait::new();
+            let mut i: u256 = 1;
+            loop {
+                let bet = self.bets.read(i);
+                bets.append(bet);
+                i += 1;
+            };
+            bets
         }
+
+        ///Attention ici faut implemeter une logique au cas ou l'user est fait plusieurs bets
+        fn get_bet_per_user(self: @ContractState, user_address: ContractAddress) -> Array<UserBet> {
+            let mut bets: Array<UserBet> = ArrayTrait::new();
+            let mut i: 256 = 1;
+            loop {
+                if self.bets.address.read(i) == user_address {
+                    let bet = self.bets.read(i);
+                    bets.append(bet);
+                }
+                i += 1;
+            }
+            
+        }
+
         fn get_total_bet_bank(self: @ContractState) -> u256 {
-
+            self.total_bet_bank.read()
         }
         
     }
