@@ -29,7 +29,8 @@ pub trait IEventBettingImpl<TContractState> {
 
 #[starknet::contract]
 pub mod EventBetting {
-    use starknet::{ContractAddress, ClassHash, get_caller_address, get_contract_address};
+    use core::option::OptionTrait;
+use starknet::{ContractAddress, ClassHash, get_caller_address, get_contract_address};
     use core::num::traits::zero::Zero;
     use openzeppelin::token::erc20::interface::IERC20Dispatcher;
     use starknet::SyscallResultTrait;
@@ -43,6 +44,8 @@ pub mod EventBetting {
         owner: ContractAddress,
         total_names: u128,
         bets: LegacyMap<ContractAddress, UserBet>,
+        bets_key: Array<ContractAddress>,
+        bets_count: u32,
         event_probability: Odds,
         yes_count: u128,
         no_count: u128,
@@ -54,7 +57,7 @@ pub mod EventBetting {
         shares_token_address: (ContractAddress, ContractAddress), ///First for the NO token address, second for the YES token address
     }
 
-    #[derive(Drop, Serde, starknet::Store)]
+    #[derive(Drop, Copy, Serde, starknet::Store, PartialEq, Eq, Hash)]
     pub struct UserBet {
         bet: u8, ///No = 0, Yes = 1
         amount: u256,
@@ -62,13 +65,13 @@ pub mod EventBetting {
         claimable_amount: u256,
     }
 
-    #[derive(Drop, Serde, starknet::Store)]
+    #[derive(Drop, Copy, Serde, starknet::Store, PartialEq, Eq, Hash)]
     pub struct Odds {
         no_probability: u256,
         yes_probability: u256,
     }
 
-    #[derive(Drop, Serde, starknet::Store)]
+    #[derive(Drop, Copy, Serde, starknet::Store, PartialEq, Eq, Hash)]
     pub enum RegistrationType {
         finite: u64,
         infinite
@@ -144,15 +147,19 @@ pub mod EventBetting {
         ///Attention ici faut implemeter une logique au cas ou l'user est fait plusieurs bets
         fn get_bet_per_user(self: @ContractState, user_address: ContractAddress) -> Array<UserBet> {
             let mut bets: Array<UserBet> = ArrayTrait::new();
-            let mut i: 256 = 1;
+            let mut i: u32 = 1;
             loop {
-                if self.bets.address.read(i) == user_address {
-                    let bet = self.bets.read(i);
+                if i > self.bets_count.read() {
+                    break;
+                }
+                let key = self.bets_key.read().get(i).unwrap();
+                if key.unbox() == @user_address {
+                    let bet = self.bets.read(*key.unbox());
                     bets.append(bet);
                 }
                 i += 1;
-            }
-            
+            };
+            bets
         }
 
         fn get_total_bet_bank(self: @ContractState) -> u256 {
