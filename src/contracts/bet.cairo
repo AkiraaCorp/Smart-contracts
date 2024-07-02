@@ -148,8 +148,9 @@ use starknet::{ContractAddress, ClassHash, get_caller_address, get_contract_addr
         fn get_bet_per_user(self: @ContractState, user_address: ContractAddress) -> Array<UserBet> {
             let mut bets: Array<UserBet> = ArrayTrait::new();
             let mut i: u32 = 1;
+            let count = self.bets_count.read();
             loop {
-                if i > self.bets_count.read() {
+                if i > count {
                     break;
                 }
                 let key = self.bets_key.read().get(i).unwrap();
