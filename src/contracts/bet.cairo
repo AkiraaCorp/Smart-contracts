@@ -160,6 +160,8 @@ pub mod EventBetting {
             };
             self.bets.write(user_address, user_bet);
             self.refresh_event_odds();
+
+            ///
         }
 
         fn get_bet(self: @ContractState, user_address: ContractAddress) -> UserBet {
@@ -233,7 +235,7 @@ pub mod EventBetting {
         fn refresh_event_odds(
             ref self: ContractState, current_odds: Odds, user_choice: bool, bet_amount: u256
         ) {
-            
+
         }
     }
 }
