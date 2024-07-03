@@ -8,7 +8,9 @@ pub trait IEventBetting<TContractState> {
     fn store_name(ref self: TContractState, name: felt252);
     fn get_name(self: @TContractState, address: ContractAddress) -> felt252;
     fn get_owner(self: @TContractState) -> ContractAddress;
-    fn place_bet(ref self: TContractState, bet: EventBetting::UserBet);
+    fn place_bet(
+        ref self: TContractState, user_address: ContractAddress, bet_amount: u256, bet: bool
+    );
     fn get_bet(self: @TContractState, user_address: ContractAddress) -> EventBetting::UserBet;
     fn get_event_probability(self: @TContractState) -> EventBetting::Odds;
     fn get_event_outcome(self: @TContractState) -> u8;
@@ -17,9 +19,18 @@ pub trait IEventBetting<TContractState> {
     fn get_time_expiration(self: @TContractState) -> u256;
     fn set_time_expiration(ref self: TContractState, time_expiration: u256);
     fn get_all_bets(self: @TContractState) -> Array<EventBetting::UserBet>;
-    fn get_bet_per_user(self: @TContractState, user_address: ContractAddress) -> Array<EventBetting::UserBet>;
+    fn get_bet_per_user(
+        self: @TContractState, user_address: ContractAddress
+    ) -> Array<EventBetting::UserBet>;
     fn get_total_bet_bank(self: @TContractState) -> u256;
-    ///rajouter fonction pour voir combien l'user peut claim + fonction pour claim
+
+    fn refresh_event_odds(
+        ref self: TContractState,
+        current_odds: EventBetting::Odds,
+        user_choice: bool,
+        bet_amount: u256
+    ); ///attention cette fonciton ne doit pas etre visible de l'exterieur
+///rajouter fonction pour voir combien l'user peut claim + fonction pour claim
 }
 
 pub trait IEventBettingImpl<TContractState> {
@@ -31,14 +42,14 @@ pub trait IEventBettingImpl<TContractState> {
 #[starknet::contract]
 pub mod EventBetting {
     use akira_smart_contract::contracts::bet::IEventBetting;
-use core::option::OptionTrait;
-use starknet::{ContractAddress, ClassHash, get_caller_address, get_contract_address};
-    use core::num::traits::zero::Zero;
-    use openzeppelin::token::erc20::interface::IERC20Dispatcher;
-    use starknet::SyscallResultTrait;
-    use openzeppelin::token::erc20::interface::IERC20DispatcherTrait;
-    use core::box::BoxTrait;
     use core::array::ArrayTrait;
+    use core::box::BoxTrait;
+    use core::num::traits::zero::Zero;
+    use core::option::OptionTrait;
+    use openzeppelin::token::erc20::interface::IERC20Dispatcher;
+    use openzeppelin::token::erc20::interface::IERC20DispatcherTrait;
+    use starknet::SyscallResultTrait;
+    use starknet::{ContractAddress, ClassHash, get_caller_address, get_contract_address};
 
 
     const PLATFORM_FEE: u256 = 5;
@@ -58,6 +69,7 @@ use starknet::{ContractAddress, ClassHash, get_caller_address, get_contract_addr
         event_outcome: u8, ///No = 0, Yes = 1 or 2 if event got no outcome yet
         is_active: bool,
         time_expiration: u256,
+        bank_wallet: ContractAddress,
         no_share_token_address: ContractAddress,
         yes_share_token_address: ContractAddress,
     }
@@ -68,6 +80,7 @@ use starknet::{ContractAddress, ClassHash, get_caller_address, get_contract_addr
         amount: u256,
         has_claimed: bool,
         claimable_amount: u256,
+        user_odds: Odds,
     }
 
     #[derive(Drop, Copy, Serde, starknet::Store, PartialEq, Eq, Hash)]
@@ -83,12 +96,19 @@ use starknet::{ContractAddress, ClassHash, get_caller_address, get_contract_addr
     }
 
     #[constructor]
-    fn constructor(ref self: ContractState, owner: ContractAddress, token_no_address: ContractAddress, token_yes_adress: ContractAddress) {
+    fn constructor(
+        ref self: ContractState,
+        owner: ContractAddress,
+        token_no_address: ContractAddress,
+        token_yes_adress: ContractAddress,
+        bank_wallet: ContractAddress
+    ) {
         ///remplir avec tout les params du storage
         self.owner.write(owner);
         let token_adresses = (token_no_address, token_yes_adress);
         self.no_share_token_address.write(token_no_address);
         self.yes_share_token_address.write(token_yes_adress);
+        self.bank_wallet.write(bank_wallet);
     }
 
     ///ici faire la fonction qui créer les 2 tokens NO et Yes pour le bet concerné
@@ -108,22 +128,38 @@ use starknet::{ContractAddress, ClassHash, get_caller_address, get_contract_addr
             self.owner.read()
         }
 
-        fn place_bet(ref self: ContractState, bet: UserBet) {
+        fn place_bet(
+            ref self: ContractState, user_address: ContractAddress, bet_amount: u256, bet: bool
+        ) {
             assert(self.get_is_active() == true, 'This event is not active');
             let odds = self.get_event_probability();
-            let (no_odds, yes_odds) = (odds.no_probability, odds.yes_probability);
-            let user_choice = bet.bet;
+            let current_odds = Odds {
+                no_probability: odds.no_probability, yes_probability: odds.yes_probability
+            };
+            let user_choice = bet;
             let mut dispatcher: IERC20Dispatcher = "0x0000";
             if user_choice == false {
-                dispatcher = IERC20Dispatcher { contract_address: self.no_share_token_address.read() };
+                dispatcher =
+                    IERC20Dispatcher { contract_address: self.no_share_token_address.read() };
+            } else {
+                dispatcher =
+                    IERC20Dispatcher { contract_address: self.yes_share_token_address.read() };
             }
-            else {
-                dispatcher = IERC20Dispatcher { contract_address: self.yes_share_token_address.read() };
-            }
-            let bet_amount = bet.amount;
-            let tx: bool = dispatcher.transfer_from(get_caller_address(), get_contract_address(), bet_amount);
-            dispatcher.transfer( 
-
+            let tx: bool = dispatcher
+                .transfer_from(get_caller_address(), get_contract_address(), bet_amount);
+            dispatcher.transfer(self.bank_wallet.read(), bet_amount * PLATFORM_FEE / 100);
+            let total_user_share = bet_amount - (bet_amount * PLATFORM_FEE / 100);
+            self.bets_count.write(self.bets_count.read() + 1);
+            self.total_bet_bank.write(self.total_bet_bank.read() + total_user_share);
+            let user_bet = UserBet {
+                bet: user_choice,
+                amount: total_user_share,
+                has_claimed: false,
+                claimable_amount: 0,
+                user_odds: current_odds
+            };
+            self.bets.write(user_address, user_bet);
+            self.refresh_event_odds();
         }
 
         fn get_bet(self: @ContractState, user_address: ContractAddress) -> UserBet {
@@ -138,7 +174,6 @@ use starknet::{ContractAddress, ClassHash, get_caller_address, get_contract_addr
             self.event_outcome.read()
         }
 
-        }
         fn get_is_active(self: @ContractState) -> bool {
             self.is_active.read()
         }
@@ -194,6 +229,11 @@ use starknet::{ContractAddress, ClassHash, get_caller_address, get_contract_addr
         fn get_total_bet_bank(self: @ContractState) -> u256 {
             self.total_bet_bank.read()
         }
-        
+
+        fn refresh_event_odds(
+            ref self: ContractState, current_odds: Odds, user_choice: bool, bet_amount: u256
+        ) {
+            
+        }
     }
 }
