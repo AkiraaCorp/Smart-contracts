@@ -2,7 +2,7 @@
 ```
 scarb --version
 scarb 2.6.4 (c4c7c0bac 2024-03-19)
-cairo: 2.6.3 (https://crates.io/crates/cairo-lang-compiler/2.6.3)
+cairo: 2.6.4 (https://crates.io/crates/cairo-lang-compiler/2.6.4)
 sierra: 1.5.0
 ```
 
