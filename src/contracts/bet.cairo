@@ -32,7 +32,8 @@ pub trait IEventBetting<TContractState> {
         user_choice: bool,
         bet_amount: u256
     );
-    fn log_cost(self: @TContractState, liquidity_precision: u64, no_prob: u64, yes_prob: u64) -> u64;
+    fn log_cost(self: @TContractState, liquidity_precision: u64, no_prob: u64, yes_prob: u64) -> cubit::f64::Fixed;
+    fn convert_odds_to_probability(self: @TContractState, no_odds: u256, yes_odds: u256) -> (cubit::f64::Fixed, cubit::f64::Fixed);
 
 ///rajouter fonction pour voir combien l'user peut claim + fonction pour claim
 }
@@ -245,13 +246,23 @@ pub mod EventBetting {
             self.total_bet_bank.read()
         }
 
-        fn log_cost(self: @ContractState, liquidity_precision: u64, no_prob: u64, yes_prob: u64) -> u64 {
+        fn log_cost(self: @ContractState, liquidity_precision: u64, no_prob: u64, yes_prob: u64) -> Fixed {
             let cost_no = FixedTrait::new_unscaled(no_prob, false) / FixedTrait::new_unscaled(liquidity_precision, false);
+            let exp_no = cost_no.exp();
             let cost_yes = FixedTrait::new_unscaled(yes_prob, false) / FixedTrait::new_unscaled(liquidity_precision, false);
+            let exp_yes = cost_yes.exp();
 
-            let result: u64 = liquidity_precision * (cost_no.mag + cost_yes.mag);
+            let result: u64 = liquidity_precision * (exp_no.mag + exp_yes.mag);
+            let fixed_result = Fixed { mag: result, sign: false };
 
-            result.ln()
+            fixed_result.ln() ///ici on sort un fixed mais on utilisera uniquement le mag
+            ///Verifier absolument le resultat de cette fonction dans les tests 
+        }
+
+        fn convert_odds_to_probability(self: @ContractState, no_odds: u256, yes_odds: u256) -> (Fixed, Fixed) {
+            let scale: u256 = 10000; ///ici il faut mettre un f64
+            let mut no_probability = (no_odds * scale) as u256;
+            let mut yes_probability = (yes_odds * scale) as u256;
 
         }
 
@@ -262,6 +273,10 @@ pub mod EventBetting {
 
             let no_odds = current_odds.no_probability;
             let yes_odds = current_odds.yes_probability;
+
+            let current_cost = log_cost(liquidity_precision, no_odds, yes_odds);
+
+
 
 
 
