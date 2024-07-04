@@ -3,6 +3,7 @@ use core::hash::Hash;
 use starknet::ContractAddress;
 
 
+
 #[starknet::interface]
 pub trait IEventBetting<TContractState> {
     fn store_name(ref self: TContractState, name: felt252);
@@ -24,12 +25,15 @@ pub trait IEventBetting<TContractState> {
     ) -> Array<EventBetting::UserBet>;
     fn get_total_bet_bank(self: @TContractState) -> u256;
 
+    ///attention cette fonciton ne doit pas etre visible de l'exterieur
     fn refresh_event_odds(
         ref self: TContractState,
         current_odds: EventBetting::Odds,
         user_choice: bool,
         bet_amount: u256
-    ); ///attention cette fonciton ne doit pas etre visible de l'exterieur
+    );
+    fn log_cost(self: @TContractState, liquidity_precision: u64, no_prob: u64, yes_prob: u64) -> u64;
+
 ///rajouter fonction pour voir combien l'user peut claim + fonction pour claim
 }
 
@@ -50,6 +54,7 @@ pub mod EventBetting {
     use openzeppelin::token::erc20::interface::IERC20DispatcherTrait;
     use starknet::SyscallResultTrait;
     use starknet::{ContractAddress, ClassHash, get_caller_address, get_contract_address};
+    use cubit::f64::{math::ops::{ln, exp}, types::fixed::{Fixed, FixedTrait}};
 
 
     const PLATFORM_FEE: u256 = 5;
@@ -63,7 +68,9 @@ pub mod EventBetting {
         bets_count: u32,
         event_probability: Odds,
         yes_count: u128,
+        yes_total_amount: u256,
         no_count: u128,
+        no_total_amount: u256,
         total_bet_bank: u256,
         bet_fee: u256,
         event_outcome: u8, ///No = 0, Yes = 1 or 2 if event got no outcome yet
@@ -85,8 +92,8 @@ pub mod EventBetting {
 
     #[derive(Drop, Copy, Serde, starknet::Store, PartialEq, Eq, Hash)]
     pub struct Odds {
-        no_probability: u256,
-        yes_probability: u256,
+        no_probability: u64,
+        yes_probability: u64,
     }
 
     #[derive(Drop, Copy, Serde, starknet::Store, PartialEq, Eq, Hash)]
@@ -151,6 +158,12 @@ pub mod EventBetting {
             let total_user_share = bet_amount - (bet_amount * PLATFORM_FEE / 100);
             self.bets_count.write(self.bets_count.read() + 1);
             self.total_bet_bank.write(self.total_bet_bank.read() + total_user_share);
+            if  user_choice == false {
+                self.no_total_amount.write(self.no_total_amount.read() + total_user_share);
+            }
+            else {
+                self.yes_total_amount.write(self.yes_total_amount.read() + total_user_share);
+            }
             let user_bet = UserBet {
                 bet: user_choice,
                 amount: total_user_share,
@@ -232,9 +245,28 @@ pub mod EventBetting {
             self.total_bet_bank.read()
         }
 
+        fn log_cost(self: @ContractState, liquidity_precision: u64, no_prob: u64, yes_prob: u64) -> u64 {
+            let cost_no = FixedTrait::new_unscaled(no_prob, false) / FixedTrait::new_unscaled(liquidity_precision, false);
+            let cost_yes = FixedTrait::new_unscaled(yes_prob, false) / FixedTrait::new_unscaled(liquidity_precision, false);
+
+            let result: u64 = liquidity_precision * (cost_no.mag + cost_yes.mag);
+
+            result.ln()
+
+        }
+
         fn refresh_event_odds(
             ref self: ContractState, current_odds: Odds, user_choice: bool, bet_amount: u256
         ) {
+            let liquidity_precision: u64 = 1000;
+
+            let no_odds = current_odds.no_probability;
+            let yes_odds = current_odds.yes_probability;
+
+
+
+
+
 
         }
     }
