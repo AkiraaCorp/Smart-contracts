@@ -110,15 +110,27 @@ pub mod EventBetting {
         owner: ContractAddress,
         token_no_address: ContractAddress,
         token_yes_adress: ContractAddress,
-        bank_wallet: ContractAddress
+        bank_wallet: ContractAddress,
+        event_name: felt252
     ) {
         ///remplir avec tout les params du storage
         self.owner.write(owner);
-        let token_adresses = (token_no_address, token_yes_adress);
         self.no_share_token_address.write(token_no_address);
         self.yes_share_token_address.write(token_yes_adress);
         self.bank_wallet.write(bank_wallet);
         self.is_active.write(false);
+        self.event_outcome.write(2);
+        self.yes_count.write(0);
+        self.no_count.write(0);
+        self.yes_total_amount.write(0);
+        self.no_total_amount.write(0);
+        self.total_names.write(0);
+        self.bets_count.write(0);
+        let probability = Odds { no_probability: 100, yes_probability: 100 };
+        self.event_probability.write(probability);
+        let array_key: Array<ContractAddress> = array![];
+        self.bets_key.write(array_key);
+        self.name.write(event_name);
     }
 
     ///ici faire la fonction qui créer les 2 tokens NO et Yes pour le bet concerné
