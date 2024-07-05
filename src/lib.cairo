@@ -1,2 +1,2 @@
 pub mod components;
-mod contracts;
+pub mod contracts;
