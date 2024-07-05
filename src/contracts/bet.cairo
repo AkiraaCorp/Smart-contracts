@@ -3,7 +3,6 @@ use core::hash::Hash;
 use starknet::ContractAddress;
 
 
-
 #[starknet::interface]
 pub trait IEventBetting<TContractState> {
     fn store_name(ref self: TContractState, name: felt252);
@@ -32,8 +31,8 @@ pub trait IEventBetting<TContractState> {
         user_choice: bool,
         bet_amount: u256
     );
-    fn log_cost(self: @TContractState, liquidity_precision: u64, no_prob: u64, yes_prob: u64) -> cubit::f64::Fixed;
-    fn convert_odds_to_probability(self: @TContractState, no_odds: u256, yes_odds: u256) -> (cubit::f64::Fixed, cubit::f64::Fixed);
+///fn log_cost(self: @TContractState, liquidity_precision: u64, no_prob: u64, yes_prob: u64) -> cubit::f64::Fixed;
+///fn convert_odds_to_probability(self: @TContractState, no_odds: u256, yes_odds: u256) -> (cubit::f64::Fixed, cubit::f64::Fixed);
 
 ///rajouter fonction pour voir combien l'user peut claim + fonction pour claim
 }
@@ -51,11 +50,14 @@ pub mod EventBetting {
     use core::box::BoxTrait;
     use core::num::traits::zero::Zero;
     use core::option::OptionTrait;
+    use cubit::f64::{math::ops::{ln, exp}, types::fixed::{Fixed, FixedTrait}};
     use openzeppelin::token::erc20::interface::IERC20Dispatcher;
     use openzeppelin::token::erc20::interface::IERC20DispatcherTrait;
     use starknet::SyscallResultTrait;
-    use starknet::{ContractAddress, ClassHash, get_caller_address, get_contract_address};
-    use cubit::f64::{math::ops::{ln, exp}, types::fixed::{Fixed, FixedTrait}};
+    use starknet::storage_access::StorageBaseAddress;
+    use starknet::{
+        ContractAddress, SyscallResult, Store, ClassHash, get_caller_address, get_contract_address
+    };
 
 
     const PLATFORM_FEE: u256 = 5;
@@ -90,7 +92,6 @@ pub mod EventBetting {
         claimable_amount: u256,
         user_odds: Odds,
     }
-
     #[derive(Drop, Copy, Serde, starknet::Store, PartialEq, Eq, Hash)]
     pub struct Odds {
         no_probability: u64,
@@ -121,6 +122,68 @@ pub mod EventBetting {
 
     ///ici faire la fonction qui créer les 2 tokens NO et Yes pour le bet concerné
 
+    impl EventBettingArray of Store<Array<ContractAddress>> {
+        fn read(
+            address_domain: u32, base: StorageBaseAddress
+        ) -> SyscallResult<Array<ContractAddress>> {
+            Store::read_at_offset(address_domain, base, 0)
+        }
+
+        fn write(
+            address_domain: u32, base: StorageBaseAddress, value: Array<ContractAddress>
+        ) -> SyscallResult<()> {
+            Store::write_at_offset(address_domain, base, 0, value)
+        }
+
+        fn read_at_offset(
+            address_domain: u32, base: StorageBaseAddress, mut offset: u8
+        ) -> SyscallResult<Array<ContractAddress>> {
+            let mut arr: Array<ContractAddress> = array![];
+
+            let len: u8 = Store::<u8>::read_at_offset(address_domain, base, offset)
+                .expect('Storage Span too large');
+            offset += 1;
+
+            let exit = len + offset;
+            loop {
+                if offset >= exit {
+                    break;
+                }
+
+                let value = Store::<ContractAddress>::read_at_offset(address_domain, base, offset)
+                    .unwrap();
+                arr.append(value);
+                offset += Store::<ContractAddress>::size();
+            };
+
+            Result::Ok(arr)
+        }
+
+        fn write_at_offset(
+            address_domain: u32,
+            base: StorageBaseAddress,
+            mut offset: u8,
+            mut value: Array<ContractAddress>
+        ) -> SyscallResult<()> {
+            let len: u8 = value.len().try_into().expect('Storage - Span too large');
+            Store::<u8>::write_at_offset(address_domain, base, offset, len).unwrap();
+            offset += 1;
+
+            while let Option::Some(element) = value
+                .pop_front() {
+                    Store::<ContractAddress>::write_at_offset(address_domain, base, offset, element)
+                        .unwrap();
+                    offset += Store::<ContractAddress>::size();
+                };
+
+            Result::Ok(())
+        }
+
+        fn size() -> u8 {
+            255 * Store::<ContractAddress>::size()
+        }
+    }
+
     #[abi(embed_v0)]
     impl EventBetting of super::IEventBetting<ContractState> {
         fn store_name(ref self: ContractState, name: felt252) {
@@ -145,7 +208,8 @@ pub mod EventBetting {
                 no_probability: odds.no_probability, yes_probability: odds.yes_probability
             };
             let user_choice = bet;
-            let mut dispatcher: IERC20Dispatcher = "0x0000";
+            let contract_address = get_caller_address(); ///ici mettre une vraie addresse
+            let mut dispatcher = IERC20Dispatcher { contract_address };
             if user_choice == false {
                 dispatcher =
                     IERC20Dispatcher { contract_address: self.no_share_token_address.read() };
@@ -159,10 +223,9 @@ pub mod EventBetting {
             let total_user_share = bet_amount - (bet_amount * PLATFORM_FEE / 100);
             self.bets_count.write(self.bets_count.read() + 1);
             self.total_bet_bank.write(self.total_bet_bank.read() + total_user_share);
-            if  user_choice == false {
+            if user_choice == false {
                 self.no_total_amount.write(self.no_total_amount.read() + total_user_share);
-            }
-            else {
+            } else {
                 self.yes_total_amount.write(self.yes_total_amount.read() + total_user_share);
             }
             let user_bet = UserBet {
@@ -173,9 +236,9 @@ pub mod EventBetting {
                 user_odds: current_odds
             };
             self.bets.write(user_address, user_bet);
-            self.refresh_event_odds();
-
-            ///
+        ///
+        /// self.refresh_event_odds();
+        ///
         }
 
         fn get_bet(self: @ContractState, user_address: ContractAddress) -> UserBet {
@@ -246,42 +309,34 @@ pub mod EventBetting {
             self.total_bet_bank.read()
         }
 
-        fn log_cost(self: @ContractState, liquidity_precision: u64, no_prob: u64, yes_prob: u64) -> Fixed {
-            let cost_no = FixedTrait::new_unscaled(no_prob, false) / FixedTrait::new_unscaled(liquidity_precision, false);
-            let exp_no = cost_no.exp();
-            let cost_yes = FixedTrait::new_unscaled(yes_prob, false) / FixedTrait::new_unscaled(liquidity_precision, false);
-            let exp_yes = cost_yes.exp();
+        // fn log_cost(self: @ContractState, liquidity_precision: u64, no_prob: u64, yes_prob: u64) -> Fixed {
+        //     let cost_no = FixedTrait::new_unscaled(no_prob, false) / FixedTrait::new_unscaled(liquidity_precision, false);
+        //     let exp_no = cost_no.exp();
+        //     let cost_yes = FixedTrait::new_unscaled(yes_prob, false) / FixedTrait::new_unscaled(liquidity_precision, false);
+        //     let exp_yes = cost_yes.exp();
 
-            let result: u64 = liquidity_precision * (exp_no.mag + exp_yes.mag);
-            let fixed_result = Fixed { mag: result, sign: false };
+        //     let result: u64 = liquidity_precision * (exp_no.mag + exp_yes.mag);
+        //     let fixed_result = Fixed { mag: result, sign: false };
 
-            fixed_result.ln() ///ici on sort un fixed mais on utilisera uniquement le mag
-            ///Verifier absolument le resultat de cette fonction dans les tests 
-        }
+        //    fixed_result.ln() ///ici on sort un fixed mais on utilisera uniquement le mag
+        ///Verifier absolument le resultat de cette fonction dans les tests 
+        //}
 
-        fn convert_odds_to_probability(self: @ContractState, no_odds: u256, yes_odds: u256) -> (Fixed, Fixed) {
-            let scale: u256 = 10000; ///ici il faut mettre un f64
-            let mut no_probability = (no_odds * scale) as u256;
-            let mut yes_probability = (yes_odds * scale) as u256;
+        // fn convert_odds_to_probability(self: @ContractState, no_odds: u256, yes_odds: u256) -> (Fixed, Fixed) {
+        //     let scale: u256 = 10000; ///ici il faut mettre un f64
+        //     let mut no_probability = (no_odds * scale) as u256;
+        //     let mut yes_probability = (yes_odds * scale) as u256;
 
-        }
+        // }
 
         fn refresh_event_odds(
             ref self: ContractState, current_odds: Odds, user_choice: bool, bet_amount: u256
-        ) {
-            let liquidity_precision: u64 = 1000;
+        ) {// let liquidity_precision: u64 = 1000;
 
-            let no_odds = current_odds.no_probability;
-            let yes_odds = current_odds.yes_probability;
+        // let no_odds = current_odds.no_probability;
+        // let yes_odds = current_odds.yes_probability;
 
-            let current_cost = log_cost(liquidity_precision, no_odds, yes_odds);
-
-
-
-
-
-
-
+        // let current_cost = log_cost(liquidity_precision, no_odds, yes_odds);
 
         }
     }
