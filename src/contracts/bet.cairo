@@ -118,6 +118,7 @@ pub mod EventBetting {
         self.no_share_token_address.write(token_no_address);
         self.yes_share_token_address.write(token_yes_adress);
         self.bank_wallet.write(bank_wallet);
+        self.is_active.write(false);
     }
 
     ///ici faire la fonction qui créer les 2 tokens NO et Yes pour le bet concerné
@@ -331,8 +332,7 @@ pub mod EventBetting {
 
         fn refresh_event_odds(
             ref self: ContractState, current_odds: Odds, user_choice: bool, bet_amount: u256
-        ) {// let liquidity_precision: u64 = 1000;
-
+        ) { // let liquidity_precision: u64 = 1000;
         // let no_odds = current_odds.no_probability;
         // let yes_odds = current_odds.yes_probability;
 
