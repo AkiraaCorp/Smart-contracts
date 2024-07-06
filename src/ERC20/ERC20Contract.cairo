@@ -1,14 +1,26 @@
+use starknet::ContractAddress;
+
 const MINTER_ROLE: felt252 = selector!("MINTER_ROLE");
 const BURNER_ROLE: felt252 = selector!("BURNER_ROLE");
 const TRANSFER_ROLE: felt252 = selector!("TRANSFER_ROLE");
 
+#[starknet::interface]
+pub trait IERC20Contract<TContractState> {
+    fn transfer_from_controled(
+        ref self: TContractState, sender: ContractAddress, amount: u256, recipient: ContractAddress
+    );
+    fn mint(ref self: TContractState, recipient: ContractAddress, amount: u256);
+    fn burn(ref self: TContractState, account: ContractAddress, amount: u256);
+}
+
 #[starknet::contract]
-pub mod YesContract {
+pub mod ERC20Contract {
+    use super::IERC20Contract;
     use openzeppelin::access::accesscontrol::AccessControlComponent;
     use openzeppelin::introspection::src5::SRC5Component;
     use openzeppelin::token::erc20::{ERC20Component, ERC20HooksEmptyImpl};
     use starknet::ContractAddress;
-    use super::{MINTER_ROLE, BURNER_ROLE};
+    use super::{MINTER_ROLE, BURNER_ROLE, TRANSFER_ROLE};
 
     component!(path: AccessControlComponent, storage: accesscontrol, event: AccessControlEvent);
     component!(path: SRC5Component, storage: src5, event: SRC5Event);
@@ -54,10 +66,10 @@ pub mod YesContract {
         ref self: ContractState,
         initial_supply: u256,
         recipient: ContractAddress,
-        owner: ContractAddress
+        owner: ContractAddress,
+        name: ByteArray,
+        symbol: ByteArray
     ) {
-        let name = "Yes";
-        let symbol = "YES";
         self.erc20.initializer(name, symbol);
         self.erc20.mint(recipient, initial_supply);
 
@@ -67,23 +79,26 @@ pub mod YesContract {
         self.accesscontrol._grant_role(TRANSFER_ROLE, owner);
     }
 
-    #[external(v0)]
-    fn mint(ref self: ContractState, recipient: ContractAddress, amount: u256) {
-        self.accesscontrol.assert_only_role(MINTER_ROLE);
-        self.erc20.mint(recipient, amount);
-    }
+    #[abi(embed_v0)]
+    impl ERC20Contract of super::IERC20Contract<ContractState> {
+        fn transfer_from_controled(
+            ref self: ContractState,
+            sender: ContractAddress,
+            amount: u256,
+            recipient: ContractAddress
+        ) {
+            self.accesscontrol.assert_only_role(TRANSFER_ROLE);
+            self.erc20._transfer(sender, recipient, amount);
+        }
 
-    #[external(v0)]
-    fn burn(ref self: ContractState, account: ContractAddress, amount: u256) {
-        self.accesscontrol.assert_only_role(BURNER_ROLE);
-        self.erc20.burn(account, amount);
-    }
+        fn mint(ref self: ContractState, recipient: ContractAddress, amount: u256) {
+            self.accesscontrol.assert_only_role(MINTER_ROLE);
+            self.erc20.mint(recipient, amount);
+        }
 
-    #[external(v0)]
-    fn transfer_from(
-        ref sef: ContractState, sender: ContractAddress, amount: u256, recipient: ContractAddress
-    ) {
-        self.accesscontrol.assert_only_role(TRANSFER_ROLE);
-        self.erc20._transfer(sender, recipient, amount);
+        fn burn(ref self: ContractState, account: ContractAddress, amount: u256) {
+            self.accesscontrol.assert_only_role(BURNER_ROLE);
+            self.erc20.burn(account, amount);
+        }
     }
 }

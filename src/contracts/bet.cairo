@@ -113,7 +113,6 @@ pub mod EventBetting {
         bank_wallet: ContractAddress,
         event_name: felt252
     ) {
-        ///remplir avec tout les params du storage
         self.owner.write(owner);
         self.no_share_token_address.write(token_no_address);
         self.yes_share_token_address.write(token_yes_adress);
@@ -132,8 +131,6 @@ pub mod EventBetting {
         self.bets_key.write(array_key);
         self.name.write(event_name);
     }
-
-    ///ici faire la fonction qui créer les 2 tokens NO et Yes pour le bet concerné
 
     impl EventBettingArray of Store<Array<ContractAddress>> {
         fn read(
