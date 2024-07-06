@@ -114,7 +114,6 @@ pub mod EventBetting {
     ) {
         ///remplir avec tout les params du storage
         self.owner.write(owner);
-        let token_adresses = (token_no_address, token_yes_adress);
         self.no_share_token_address.write(token_no_address);
         self.yes_share_token_address.write(token_yes_adress);
         self.bank_wallet.write(bank_wallet);
@@ -208,7 +207,7 @@ pub mod EventBetting {
                 no_probability: odds.no_probability, yes_probability: odds.yes_probability
             };
             let user_choice = bet;
-            let contract_address = get_caller_address(); ///ici mettre une vraie addresse
+            let contract_address = get_caller_address(); ///ici mettre une vraie addresse avec les tokens yes et no
             let mut dispatcher = IERC20Dispatcher { contract_address };
             if user_choice == false {
                 dispatcher =
