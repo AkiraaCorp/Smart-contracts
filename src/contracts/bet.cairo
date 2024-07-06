@@ -29,11 +29,8 @@ pub trait IEventBetting<TContractState> {
         ref self: TContractState,
         current_odds: EventBetting::Odds,
         user_choice: bool,
-        bet_amount: u256
+        bet_amount: u64
     );
-///fn log_cost(self: @TContractState, liquidity_precision: u64, no_prob: u64, yes_prob: u64) -> cubit::f64::Fixed;
-///fn convert_odds_to_probability(self: @TContractState, no_odds: u256, yes_odds: u256) -> (cubit::f64::Fixed, cubit::f64::Fixed);
-
 ///rajouter fonction pour voir combien l'user peut claim + fonction pour claim
 }
 
@@ -132,6 +129,39 @@ pub mod EventBetting {
         self.name.write(event_name);
     }
 
+    fn to_u64(value: Fixed) -> u64 {
+        let scale = 100_u64;
+        let mag_with_scale = value.mag * scale;
+        if value.sign {
+            mag_with_scale
+        } else {
+            let max_value = 18446744073709551615;
+            max_value - mag_with_scale + 1
+        }
+    }
+
+    fn from_u64(value: u64) -> Fixed {
+        let scale = 100_u64;
+        let mag_with_scale = value / scale;
+        let sign = value <= 18446744073709551615 / 2;
+        Fixed { mag: mag_with_scale, sign }
+    }
+
+    fn log_cost(b: Fixed, no_prob: Fixed, yes_prob: Fixed) -> Fixed {
+        let e_no = no_prob / b.exp();
+        let e_yes = yes_prob / b.exp();
+        b * (e_no + e_yes).ln()
+    }
+
+    fn cost_diff(new: Fixed, initial: Fixed) -> Fixed {
+        let result_mag = if initial.mag >= new.mag {
+            initial.mag - new.mag
+        } else {
+            new.mag - initial.mag
+        };
+        Fixed { mag: result_mag, sign: initial.sign }
+    }
+
     impl EventBettingArray of Store<Array<ContractAddress>> {
         fn read(
             address_domain: u32, base: StorageBaseAddress
@@ -218,7 +248,8 @@ pub mod EventBetting {
                 no_probability: odds.no_probability, yes_probability: odds.yes_probability
             };
             let user_choice = bet;
-            let contract_address = get_caller_address(); ///ici mettre une vraie addresse
+            let contract_address =
+                get_caller_address(); ///ici mettre une vraie addresse avec les tokens yes et no
             let mut dispatcher = IERC20Dispatcher { contract_address };
             if user_choice == false {
                 dispatcher =
@@ -319,34 +350,46 @@ pub mod EventBetting {
             self.total_bet_bank.read()
         }
 
-        // fn log_cost(self: @ContractState, liquidity_precision: u64, no_prob: u64, yes_prob: u64) -> Fixed {
-        //     let cost_no = FixedTrait::new_unscaled(no_prob, false) / FixedTrait::new_unscaled(liquidity_precision, false);
-        //     let exp_no = cost_no.exp();
-        //     let cost_yes = FixedTrait::new_unscaled(yes_prob, false) / FixedTrait::new_unscaled(liquidity_precision, false);
-        //     let exp_yes = cost_yes.exp();
-
-        //     let result: u64 = liquidity_precision * (exp_no.mag + exp_yes.mag);
-        //     let fixed_result = Fixed { mag: result, sign: false };
-
-        //    fixed_result.ln() ///ici on sort un fixed mais on utilisera uniquement le mag
-        ///Verifier absolument le resultat de cette fonction dans les tests 
-        //}
-
-        // fn convert_odds_to_probability(self: @ContractState, no_odds: u256, yes_odds: u256) -> (Fixed, Fixed) {
-        //     let scale: u256 = 10000; ///ici il faut mettre un f64
-        //     let mut no_probability = (no_odds * scale) as u256;
-        //     let mut yes_probability = (yes_odds * scale) as u256;
-
-        // }
-
         fn refresh_event_odds(
-            ref self: ContractState, current_odds: Odds, user_choice: bool, bet_amount: u256
-        ) { // let liquidity_precision: u64 = 1000;
-        // let no_odds = current_odds.no_probability;
-        // let yes_odds = current_odds.yes_probability;
+            ref self: ContractState, current_odds: Odds, user_choice: bool, bet_amount: u64
+        ) {
+            let b = FixedTrait::new_unscaled(1000, false); ///param de la liquidité (voir LMSR)
 
-        // let current_cost = log_cost(liquidity_precision, no_odds, yes_odds);
+            let current_yes = self.get_event_probability().yes_probability;
+            let current_no = self.get_event_probability().no_probability;
 
+            let initial_yes_odds = FixedTrait::new_unscaled(current_yes, false)
+                / FixedTrait::new_unscaled(100, false);
+            let initial_no_odds = FixedTrait::new_unscaled(current_no, false)
+                / FixedTrait::new_unscaled(100, false);
+
+            let mut initial_yes_prob = FixedTrait::new_unscaled(10000, false) / initial_yes_odds;
+            let mut initial_no_prob = FixedTrait::new_unscaled(10000, false) / initial_no_odds;
+
+            let bet_amt_fixed = Fixed { mag: bet_amount, sign: false };
+
+            let initial_cost = log_cost(b, initial_no_prob, initial_yes_prob);
+
+            if user_choice {
+                initial_yes_prob.mag += bet_amt_fixed.mag;
+            } else {
+                initial_no_prob.mag += bet_amt_fixed.mag;
+            }
+
+            let new_cost = log_cost(b, initial_no_prob, initial_yes_prob);
+
+            let cost_difference = cost_diff(new_cost, initial_cost);
+
+            if user_choice {
+                initial_yes_prob.mag += cost_difference.mag;
+            } else {
+                initial_no_prob.mag += cost_difference.mag;
+            }
+
+            let updated_odds = Odds {
+                no_probability: initial_no_prob.mag, yes_probability: initial_yes_prob.mag,
+            };
+            self.event_probability.write(updated_odds);
         }
     }
 }

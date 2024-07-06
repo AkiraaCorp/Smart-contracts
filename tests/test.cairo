@@ -1,6 +1,6 @@
 use snforge_std::{declare, ContractClassTrait, start_cheat_caller_address};
-use starknet::contract_address::contract_address_const;
 use starknet::ContractAddress;
+use starknet::contract_address::contract_address_const;
 use akira_smart_contract::contracts::bet::IEventBettingDispatcher;
 use akira_smart_contract::contracts::bet::IEventBettingDispatcherTrait;
 use akira_smart_contract::ERC20::ERC20Contract::IERC20ContractDispatcher;
