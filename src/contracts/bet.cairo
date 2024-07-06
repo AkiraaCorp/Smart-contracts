@@ -31,9 +31,6 @@ pub trait IEventBetting<TContractState> {
         user_choice: bool,
         bet_amount: u64
     );
-    ///fn log_cost(self: @TContractState, b: cubit::f64::Fixed, no_prob: cubit::f64::Fixed, yes_prob: cubit::f64::Fixed) -> cubit::f64::Fixed;
-    ///fn convert_odds_to_probability(self: @TContractState, no_odds: u256, yes_odds: u256) -> (cubit::f64::Fixed, cubit::f64::Fixed);
-
 ///rajouter fonction pour voir combien l'user peut claim + fonction pour claim
 }
 
@@ -251,7 +248,8 @@ pub mod EventBetting {
                 no_probability: odds.no_probability, yes_probability: odds.yes_probability
             };
             let user_choice = bet;
-            let contract_address = get_caller_address(); ///ici mettre une vraie addresse avec les tokens yes et no
+            let contract_address =
+                get_caller_address(); ///ici mettre une vraie addresse avec les tokens yes et no
             let mut dispatcher = IERC20Dispatcher { contract_address };
             if user_choice == false {
                 dispatcher =
@@ -352,14 +350,6 @@ pub mod EventBetting {
             self.total_bet_bank.read()
         }
 
-        // fn convert_odds_to_probability(self: @ContractState, no_odds: u256, yes_odds: u256) -> (Fixed, Fixed) {
-        //     let scale: u256 = 10000; ///ici il faut mettre un f64 (10000.0 pour un u256)
-
-        //     let mut no_probability = (no_odds * scale);
-        //     let mut yes_probability = (yes_odds * scale);
-
-        // }
-
         fn refresh_event_odds(
             ref self: ContractState, current_odds: Odds, user_choice: bool, bet_amount: u64
         ) {
@@ -367,15 +357,17 @@ pub mod EventBetting {
 
             let current_yes = self.get_event_probability().yes_probability;
             let current_no = self.get_event_probability().no_probability;
-            
-            let initial_yes_odds = FixedTrait::new_unscaled(current_yes, false) / FixedTrait::new_unscaled(100, false);
-            let initial_no_odds = FixedTrait::new_unscaled(current_no, false) / FixedTrait::new_unscaled(100, false);
-            
+
+            let initial_yes_odds = FixedTrait::new_unscaled(current_yes, false)
+                / FixedTrait::new_unscaled(100, false);
+            let initial_no_odds = FixedTrait::new_unscaled(current_no, false)
+                / FixedTrait::new_unscaled(100, false);
+
             let mut initial_yes_prob = FixedTrait::new_unscaled(10000, false) / initial_yes_odds;
             let mut initial_no_prob = FixedTrait::new_unscaled(10000, false) / initial_no_odds;
-            
+
             let bet_amt_fixed = Fixed { mag: bet_amount, sign: false };
-            
+
             let initial_cost = log_cost(b, initial_no_prob, initial_yes_prob);
 
             if user_choice {
@@ -383,20 +375,19 @@ pub mod EventBetting {
             } else {
                 initial_no_prob.mag += bet_amt_fixed.mag;
             }
-            
+
             let new_cost = log_cost(b, initial_no_prob, initial_yes_prob);
-            
+
             let cost_difference = cost_diff(new_cost, initial_cost);
-            
+
             if user_choice {
                 initial_yes_prob.mag += cost_difference.mag;
             } else {
                 initial_no_prob.mag += cost_difference.mag;
             }
-            
+
             let updated_odds = Odds {
-                no_probability: initial_no_prob.mag,
-                yes_probability: initial_yes_prob.mag,
+                no_probability: initial_no_prob.mag, yes_probability: initial_yes_prob.mag,
             };
             self.event_probability.write(updated_odds);
         }

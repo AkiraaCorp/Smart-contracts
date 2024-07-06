@@ -1,8 +1,8 @@
-use snforge_std::{declare, ContractClassTrait, start_cheat_caller_address};
-use starknet::contract_address::contract_address_const;
-use starknet::ContractAddress;
 use akira_smart_contract::contracts::bet::IEventBettingDispatcher;
 use akira_smart_contract::contracts::bet::IEventBettingDispatcherTrait;
+use snforge_std::{declare, ContractClassTrait, start_cheat_caller_address};
+use starknet::ContractAddress;
+use starknet::contract_address::contract_address_const;
 
 fn deploy_contract() -> (IEventBettingDispatcher, ContractAddress) {
     let name: ByteArray = "EventBetting";
@@ -24,12 +24,12 @@ fn deploy_contract() -> (IEventBettingDispatcher, ContractAddress) {
 
 #[cfg(test)]
 mod test {
-    use starknet::ContractAddress;
     use akira_smart_contract::contracts::bet::IEventBettingDispatcher;
     use akira_smart_contract::contracts::bet::IEventBettingDispatcherTrait;
+    use snforge_std::start_cheat_caller_address;
+    use starknet::ContractAddress;
     use starknet::contract_address::contract_address_const;
     use super::deploy_contract;
-    use snforge_std::start_cheat_caller_address;
 
     #[test]
     fn get_owner_test() {

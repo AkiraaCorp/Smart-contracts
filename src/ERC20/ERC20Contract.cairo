@@ -15,11 +15,11 @@ pub trait IERC20Contract<TContractState> {
 
 #[starknet::contract]
 pub mod ERC20Contract {
-    use super::IERC20Contract;
     use openzeppelin::access::accesscontrol::AccessControlComponent;
     use openzeppelin::introspection::src5::SRC5Component;
     use openzeppelin::token::erc20::{ERC20Component, ERC20HooksEmptyImpl};
     use starknet::ContractAddress;
+    use super::IERC20Contract;
     use super::{MINTER_ROLE, BURNER_ROLE, TRANSFER_ROLE};
 
     component!(path: AccessControlComponent, storage: accesscontrol, event: AccessControlEvent);
