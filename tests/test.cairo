@@ -3,6 +3,8 @@ use starknet::contract_address::contract_address_const;
 use starknet::ContractAddress;
 use akira_smart_contract::contracts::bet::IEventBettingDispatcher;
 use akira_smart_contract::contracts::bet::IEventBettingDispatcherTrait;
+use akira_smart_contract::ERC20::ERC20Contract::IERC20ContractDispatcher;
+use akira_smart_contract::ERC20::ERC20Contract::IERC20ContractDispatcherTrait;
 
 fn deploy_contract() -> (IEventBettingDispatcher, ContractAddress) {
     let name: ByteArray = "EventBetting";
@@ -14,7 +16,11 @@ fn deploy_contract() -> (IEventBettingDispatcher, ContractAddress) {
     let (contract_address, _) = contract
         .deploy(
             @array![
-                owner.into(), token_no_address.into(), token_yes_address.into(), bank_wallet.into()
+                owner.into(),
+                token_no_address.into(),
+                token_yes_address.into(),
+                bank_wallet.into(),
+                'test'.into()
             ]
         )
         .unwrap();
@@ -24,12 +30,18 @@ fn deploy_contract() -> (IEventBettingDispatcher, ContractAddress) {
 
 #[cfg(test)]
 mod test {
+    use snforge_std::{declare, ContractClassTrait, start_cheat_caller_address};
     use starknet::ContractAddress;
     use akira_smart_contract::contracts::bet::IEventBettingDispatcher;
     use akira_smart_contract::contracts::bet::IEventBettingDispatcherTrait;
     use starknet::contract_address::contract_address_const;
     use super::deploy_contract;
-    use snforge_std::start_cheat_caller_address;
+    use akira_smart_contract::ERC20::ERC20Contract::IERC20ContractDispatcher;
+    use akira_smart_contract::ERC20::ERC20Contract::IERC20ContractDispatcherTrait;
+    use openzeppelin::token::erc20::interface::{
+        ERC20ABI, ERC20ABIDispatcher, ERC20ABIDispatcherTrait
+    };
+    use openzeppelin::utils::serde::SerializedAppend;
 
     #[test]
     fn get_owner_test() {
@@ -96,5 +108,31 @@ mod test {
         start_cheat_caller_address(contract_address, owner);
         dispatcher.set_time_expiration(200);
         assert_eq!(dispatcher.get_time_expiration(), 200);
+    }
+
+    #[test]
+    // #[should_panic]
+    fn ERC20_test() {
+        let mut calldata: Array<felt252> = array![];
+        let name: ByteArray = "ERC20Contract";
+        let contract = declare(name).unwrap();
+        let owner: ContractAddress = contract_address_const::<'owner'>();
+        let name_token = 0;
+        let initial_supply: u256 = 200;
+        let initial_supply_low = initial_supply.low;
+        let initial_supply_high = initial_supply.high;
+        calldata.append(initial_supply_low.into());
+        calldata.append(initial_supply_high.into());
+        calldata.append(owner.into());
+        calldata.append(owner.into());
+        calldata.append(name_token.into());
+        let (contract_address, _) = contract.deploy(@calldata).unwrap();
+        // let dispatcherContract = IERC20ContractDispatcher { contract_address };
+        // start_cheat_caller_address(contract_address, owner);
+        let dispatcherMeta = ERC20ABIDispatcher { contract_address };
+        // let sender: ContractAddress = contract_address_const::<'sender'>();
+        // let recipient1 = contract_address_const::<'recipient1'>();
+        assert_eq!(dispatcherMeta.name(), "No");
+    // dispatcherContract.transfer_from_controled(owner, 50, recipient1);
     }
 }

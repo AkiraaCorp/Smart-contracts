@@ -34,8 +34,8 @@ pub mod ERC20Contract {
     #[abi(embed_v0)]
     impl SRC5Impl = SRC5Component::SRC5Impl<ContractState>;
 
-    #[abi(embed_v0)]
-    impl ERC20Impl = ERC20Component::ERC20Impl<ContractState>;
+    // #[abi(embed_v0)]
+    // impl ERC20Impl = ERC20Component::ERC20Impl<ContractState>;
     #[abi(embed_v0)]
     impl ERC20MetadataImpl = ERC20Component::ERC20MetadataImpl<ContractState>;
     impl ERC20InternalImpl = ERC20Component::InternalImpl<ContractState>;
@@ -64,19 +64,26 @@ pub mod ERC20Contract {
     #[constructor]
     fn constructor(
         ref self: ContractState,
-        initial_supply: u256,
+        initial_supply_low: u128,
+        initial_supply_high: u128,
         recipient: ContractAddress,
         owner: ContractAddress,
-        name: ByteArray,
-        symbol: ByteArray
+        name: u8
     ) {
-        self.erc20.initializer(name, symbol);
-        self.erc20.mint(recipient, initial_supply);
-
         self.accesscontrol.initializer();
         self.accesscontrol._grant_role(MINTER_ROLE, owner);
         self.accesscontrol._grant_role(BURNER_ROLE, owner);
         self.accesscontrol._grant_role(TRANSFER_ROLE, owner);
+        let mut token_name: ByteArray = "No";
+        let mut symbol: ByteArray = "NO";
+        if (name != 0) {
+            token_name = "Yes";
+            symbol = "YES";
+        }
+        self.erc20.initializer(token_name, symbol);
+
+        let initial_supply = u256 { low: initial_supply_low, high: initial_supply_high, };
+        self.erc20.mint(recipient, initial_supply);
     }
 
     #[abi(embed_v0)]
