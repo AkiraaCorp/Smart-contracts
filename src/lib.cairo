@@ -1,2 +1,3 @@
 pub mod components;
-mod contracts;
+pub mod contracts;
+pub mod ERC20;
