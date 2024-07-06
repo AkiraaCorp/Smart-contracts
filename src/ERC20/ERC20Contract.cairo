@@ -6,11 +6,13 @@ const TRANSFER_ROLE: felt252 = selector!("TRANSFER_ROLE");
 
 #[starknet::interface]
 pub trait IERC20Contract<TContractState> {
-    fn transfer_from_controled(
+    fn controled_transfer_from(
         ref self: TContractState, sender: ContractAddress, amount: u256, recipient: ContractAddress
     );
     fn mint(ref self: TContractState, recipient: ContractAddress, amount: u256);
     fn burn(ref self: TContractState, account: ContractAddress, amount: u256);
+    fn get_balance_of(ref self: TContractState, account: ContractAddress) -> u256;
+    fn supply_total(ref self: TContractState) -> u256;
 }
 
 #[starknet::contract]
@@ -88,7 +90,7 @@ pub mod ERC20Contract {
 
     #[abi(embed_v0)]
     impl ERC20Contract of super::IERC20Contract<ContractState> {
-        fn transfer_from_controled(
+        fn controled_transfer_from(
             ref self: ContractState,
             sender: ContractAddress,
             amount: u256,
@@ -106,6 +108,14 @@ pub mod ERC20Contract {
         fn burn(ref self: ContractState, account: ContractAddress, amount: u256) {
             self.accesscontrol.assert_only_role(BURNER_ROLE);
             self.erc20.burn(account, amount);
+        }
+
+        fn get_balance_of(ref self: ContractState, account: ContractAddress) -> u256 {
+            self.erc20.ERC20_balances.read(account)
+        }
+
+        fn supply_total(ref self: ContractState) -> u256 {
+            self.erc20.ERC20_total_supply.read()
         }
     }
 }
