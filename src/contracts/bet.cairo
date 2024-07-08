@@ -13,6 +13,7 @@ pub trait IEventBetting<TContractState> {
     );
     fn get_bet(self: @TContractState, user_address: ContractAddress) -> EventBetting::UserBet;
     fn get_event_probability(self: @TContractState) -> EventBetting::Odds;
+    fn set_event_probability(ref self: TContractState, no_initial_prob: u64, yes_initial_prob: u64);
     fn get_event_outcome(self: @TContractState) -> u8;
     fn get_is_active(self: @TContractState) -> bool;
     fn set_is_active(ref self: TContractState, is_active: bool);
@@ -25,12 +26,7 @@ pub trait IEventBetting<TContractState> {
     fn get_total_bet_bank(self: @TContractState) -> u256;
 
     ///attention cette fonciton ne doit pas etre visible de l'exterieur
-    fn refresh_event_odds(
-        ref self: TContractState,
-        current_odds: EventBetting::Odds,
-        user_choice: bool,
-        bet_amount: u64
-    );
+    fn refresh_event_odds(ref self: TContractState, user_choice: bool, bet_amount: u64);
 ///rajouter fonction pour voir combien l'user peut claim + fonction pour claim
 }
 
@@ -47,6 +43,7 @@ pub mod EventBetting {
     use core::box::BoxTrait;
     use core::num::traits::zero::Zero;
     use core::option::OptionTrait;
+    use core::traits::TryInto;
     use cubit::f64::{math::ops::{ln, exp}, types::fixed::{Fixed, FixedTrait}};
     use openzeppelin::token::erc20::interface::IERC20Dispatcher;
     use openzeppelin::token::erc20::interface::IERC20DispatcherTrait;
@@ -276,10 +273,14 @@ pub mod EventBetting {
                 claimable_amount: 0,
                 user_odds: current_odds
             };
+
+            let bet_amount_convert: u64 = bet_amount
+                .try_into()
+                .expect('coulndt convert bet amount');
+            self.refresh_event_odds(user_choice, bet_amount_convert);
             self.bets.write(user_address, user_bet);
-        ///
-        /// self.refresh_event_odds();
-        ///
+        ///verifier que tout les write dans le storage ont ete fait
+
         }
 
         fn get_bet(self: @ContractState, user_address: ContractAddress) -> UserBet {
@@ -288,6 +289,15 @@ pub mod EventBetting {
 
         fn get_event_probability(self: @ContractState) -> Odds {
             self.event_probability.read()
+        }
+
+        fn set_event_probability(
+            ref self: ContractState, no_initial_prob: u64, yes_initial_prob: u64
+        ) {
+            let initial_probibility = Odds {
+                no_probability: no_initial_prob, yes_probability: yes_initial_prob
+            };
+            self.event_probability.write(initial_probibility);
         }
 
         fn get_event_outcome(self: @ContractState) -> u8 {
@@ -350,9 +360,7 @@ pub mod EventBetting {
             self.total_bet_bank.read()
         }
 
-        fn refresh_event_odds(
-            ref self: ContractState, current_odds: Odds, user_choice: bool, bet_amount: u64
-        ) {
+        fn refresh_event_odds(ref self: ContractState, user_choice: bool, bet_amount: u64) {
             let b = FixedTrait::new_unscaled(1000, false); ///param de la liquidité (voir LMSR)
 
             let current_yes = self.get_event_probability().yes_probability;

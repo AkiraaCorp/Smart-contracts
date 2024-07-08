@@ -1,11 +1,11 @@
-use snforge_std::{declare, ContractClassTrait, start_cheat_caller_address};
-use starknet::ContractAddress;
-use starknet::contract_address::contract_address_const;
-use akira_smart_contract::contracts::bet::{IEventBettingDispatcher, IEventBettingDispatcherTrait};
 use akira_smart_contract::ERC20::ERC20Contract::{
     IERC20ContractDispatcher, IERC20ContractDispatcherTrait
 };
+use akira_smart_contract::contracts::bet::{IEventBettingDispatcher, IEventBettingDispatcherTrait};
 use openzeppelin::token::erc20::interface::{ERC20ABI, ERC20ABIDispatcher, ERC20ABIDispatcherTrait};
+use snforge_std::{declare, ContractClassTrait, start_cheat_caller_address};
+use starknet::ContractAddress;
+use starknet::contract_address::contract_address_const;
 
 fn deploy_event_betting() -> (IEventBettingDispatcher, ContractAddress) {
     let name: ByteArray = "EventBetting";
@@ -51,19 +51,19 @@ fn deploy_erc20(
 
 #[cfg(test)]
 mod test {
-    use snforge_std::{ContractClassTrait, start_cheat_caller_address};
-    use starknet::ContractAddress;
-    use akira_smart_contract::contracts::bet::{
-        IEventBettingDispatcher, IEventBettingDispatcherTrait
-    };
-    use starknet::contract_address::contract_address_const;
-    use super::{deploy_event_betting, deploy_erc20};
     use akira_smart_contract::ERC20::ERC20Contract::{
         IERC20ContractDispatcher, IERC20ContractDispatcherTrait
+    };
+    use akira_smart_contract::contracts::bet::{
+        IEventBettingDispatcher, IEventBettingDispatcherTrait
     };
     use openzeppelin::token::erc20::interface::{
         ERC20ABI, ERC20ABIDispatcher, ERC20ABIDispatcherTrait
     };
+    use snforge_std::{ContractClassTrait, start_cheat_caller_address};
+    use starknet::ContractAddress;
+    use starknet::contract_address::contract_address_const;
+    use super::{deploy_event_betting, deploy_erc20};
 
     #[test]
     fn get_owner_test() {
@@ -234,5 +234,33 @@ mod test {
         let owner: ContractAddress = contract_address_const::<'owner'>();
         let recipient1 = contract_address_const::<'recipient1'>();
         dispatcher_contract.controled_transfer_from(owner, 50, recipient1);
+    }
+
+
+    ///odds tests
+    /// 
+    #[test]
+    fn odds_refresh_test_pass() {
+        let (dispatcher, _contract_address) = deploy_event_betting();
+        let (_dispatcher_ABI, dispatcher_contract, contract_address) = deploy_erc20(
+            "ERC20Contract", 200, 0
+        );
+        let owner: ContractAddress = contract_address_const::<'owner'>();
+    }
+
+    fn odds_refresh_test_fail() {
+        let (dispatcher, _contract_address) = deploy_event_betting();
+        let (_dispatcher_ABI, dispatcher_contract, contract_address) = deploy_erc20(
+            "ERC20Contract", 200, 0
+        );
+        let owner: ContractAddress = contract_address_const::<'owner'>();
+    }
+
+    fn place_bets_fail_bet_amount_too_high() {
+        let (dispatcher, _contract_address) = deploy_event_betting();
+        let (_dispatcher_ABI, dispatcher_contract, contract_address) = deploy_erc20(
+            "ERC20Contract", 200, 0
+        );
+        let owner: ContractAddress = contract_address_const::<'owner'>();
     }
 }
