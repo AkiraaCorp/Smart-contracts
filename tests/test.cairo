@@ -1,10 +1,10 @@
 use akira_smart_contract::ERC20::ERC20Contract::{
     IERC20ContractDispatcher, IERC20ContractDispatcherTrait
 };
-use akira_smart_contract::contracts::bet::{IEventBettingDispatcher, IEventBettingDispatcherTrait};
-use openzeppelin::token::erc20::interface::{ERC20ABI, ERC20ABIDispatcher, ERC20ABIDispatcherTrait};
 use akira_smart_contract::contracts::bet::EventBetting::{to_u64, log_cost, cost_diff, from_u64};
+use akira_smart_contract::contracts::bet::{IEventBettingDispatcher, IEventBettingDispatcherTrait};
 use cubit::f64::{math::ops::{ln, exp}, types::fixed::{Fixed, FixedTrait}};
+use openzeppelin::token::erc20::interface::{ERC20ABI, ERC20ABIDispatcher, ERC20ABIDispatcherTrait};
 use snforge_std::{declare, ContractClassTrait, start_cheat_caller_address};
 use starknet::ContractAddress;
 use starknet::contract_address::contract_address_const;
@@ -56,6 +56,18 @@ mod test {
     use akira_smart_contract::ERC20::ERC20Contract::{
         IERC20ContractDispatcher, IERC20ContractDispatcherTrait
     };
+
+    // #[test]
+    // fn log_cost_pass() {
+
+    // }
+
+    // #[test]
+    // fn cost_diff_pass() {
+
+    // }
+
+    use akira_smart_contract::contracts::bet::EventBetting::{to_u64, log_cost, cost_diff, from_u64};
     use akira_smart_contract::contracts::bet::{
         IEventBettingDispatcher, IEventBettingDispatcherTrait
     };
@@ -275,25 +287,11 @@ mod test {
         println!("The value of new yes probability is : {}", new_yes_prob);
         assert_eq!(no_odds, 5714);
         assert_eq!(yes_odds, 4167);
-
     }
-
-    // #[test]
-    // fn log_cost_pass() {
-
-
-    // }
-
-    // #[test]
-    // fn cost_diff_pass() {
-
-    // }
-
-    use akira_smart_contract::contracts::bet::EventBetting::{to_u64, log_cost, cost_diff, from_u64};
     #[test]
     fn to_u64_pass() {
         let fixed_value = cubit::f64::Fixed { mag: 2500, sign: false };
-        let result = akira_smart_contract::contracts::bet::EventBetting:: to_u64(fixed_value);
+        let result = akira_smart_contract::contracts::bet::EventBetting::to_u64(fixed_value);
         println!("The value of result is : {}", result);
         assert_eq!(result, 250000);
     }
@@ -305,21 +303,19 @@ mod test {
         println!("The value of result is : {}", result.mag);
         assert_eq!(result.mag, 25);
     }
+// fn odds_refresh_test_fail() {
+//     let (dispatcher, _contract_address) = deploy_event_betting();
+//     let (_dispatcher_ABI, dispatcher_contract, contract_address) = deploy_erc20(
+//         "ERC20Contract", 200, 0
+//     );
+//     let owner: ContractAddress = contract_address_const::<'owner'>();
+// }
 
-
-    // fn odds_refresh_test_fail() {
-    //     let (dispatcher, _contract_address) = deploy_event_betting();
-    //     let (_dispatcher_ABI, dispatcher_contract, contract_address) = deploy_erc20(
-    //         "ERC20Contract", 200, 0
-    //     );
-    //     let owner: ContractAddress = contract_address_const::<'owner'>();
-    // }
-
-    // fn place_bets_fail_bet_amount_too_high() {
-    //     let (dispatcher, _contract_address) = deploy_event_betting();
-    //     let (_dispatcher_ABI, dispatcher_contract, contract_address) = deploy_erc20(
-    //         "ERC20Contract", 200, 0
-    //     );
-    //     let owner: ContractAddress = contract_address_const::<'owner'>();
-    // }
+// fn place_bets_fail_bet_amount_too_high() {
+//     let (dispatcher, _contract_address) = deploy_event_betting();
+//     let (_dispatcher_ABI, dispatcher_contract, contract_address) = deploy_erc20(
+//         "ERC20Contract", 200, 0
+//     );
+//     let owner: ContractAddress = contract_address_const::<'owner'>();
+// }
 }

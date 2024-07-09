@@ -399,5 +399,3 @@ pub mod EventBetting {
         }
     }
 }
-
-1000 * 
