@@ -3,6 +3,8 @@ use akira_smart_contract::ERC20::ERC20Contract::{
 };
 use akira_smart_contract::contracts::bet::{IEventBettingDispatcher, IEventBettingDispatcherTrait};
 use openzeppelin::token::erc20::interface::{ERC20ABI, ERC20ABIDispatcher, ERC20ABIDispatcherTrait};
+use akira_smart_contract::contracts::bet::EventBetting::{to_u64, log_cost, cost_diff, from_u64};
+use cubit::f64::{math::ops::{ln, exp}, types::fixed::{Fixed, FixedTrait}};
 use snforge_std::{declare, ContractClassTrait, start_cheat_caller_address};
 use starknet::ContractAddress;
 use starknet::contract_address::contract_address_const;
@@ -238,7 +240,7 @@ mod test {
 
 
     ///odds tests
-    /// 
+    ///use super::{deploy_event_betting, deploy_erc20}; 
     #[test]
     fn odds_refresh_test_pass() {
         let (dispatcher, _contract_address) = deploy_event_betting();
@@ -246,21 +248,78 @@ mod test {
             "ERC20Contract", 200, 0
         );
         let owner: ContractAddress = contract_address_const::<'owner'>();
+
+        let no_odds: u64 = 5714;
+        let yes_odds: u64 = 4167;
+
+        dispatcher.set_event_probability(no_odds, yes_odds);
+        let current_odds = dispatcher.get_event_probability();
+        let current_no_prob = current_odds.no_probability;
+        let current_yes_prob = current_odds.yes_probability;
+
+        println!("The value of no probability is : {}", current_no_prob);
+        println!("The value of yes probability is : {}", current_yes_prob);
+        assert_eq!(current_no_prob, 5714);
+        assert_eq!(current_yes_prob, 4167);
+
+        let bet_amount = 2500;
+        let user_choice = true;
+
+        dispatcher.refresh_event_odds(user_choice, bet_amount);
+
+        let new_odds = dispatcher.get_event_probability();
+        let new_no_prob = new_odds.no_probability;
+        let new_yes_prob = new_odds.yes_probability;
+
+        println!("The value of new no probability is : {}", new_no_prob);
+        println!("The value of new yes probability is : {}", new_yes_prob);
+        assert_eq!(no_odds, 5714);
+        assert_eq!(yes_odds, 4167);
+
     }
 
-    fn odds_refresh_test_fail() {
-        let (dispatcher, _contract_address) = deploy_event_betting();
-        let (_dispatcher_ABI, dispatcher_contract, contract_address) = deploy_erc20(
-            "ERC20Contract", 200, 0
-        );
-        let owner: ContractAddress = contract_address_const::<'owner'>();
+    // #[test]
+    // fn log_cost_pass() {
+
+
+    // }
+
+    // #[test]
+    // fn cost_diff_pass() {
+
+    // }
+
+    use akira_smart_contract::contracts::bet::EventBetting::{to_u64, log_cost, cost_diff, from_u64};
+    #[test]
+    fn to_u64_pass() {
+        let fixed_value = cubit::f64::Fixed { mag: 2500, sign: false };
+        let result = akira_smart_contract::contracts::bet::EventBetting:: to_u64(fixed_value);
+        println!("The value of result is : {}", result);
+        assert_eq!(result, 250000);
     }
 
-    fn place_bets_fail_bet_amount_too_high() {
-        let (dispatcher, _contract_address) = deploy_event_betting();
-        let (_dispatcher_ABI, dispatcher_contract, contract_address) = deploy_erc20(
-            "ERC20Contract", 200, 0
-        );
-        let owner: ContractAddress = contract_address_const::<'owner'>();
+    #[test]
+    fn from_u64_pass() {
+        let number: u64 = 250000;
+        let result = from_u64(number);
+        println!("The value of result is : {}", result.mag);
+        assert_eq!(result.mag, 25);
     }
+
+
+    // fn odds_refresh_test_fail() {
+    //     let (dispatcher, _contract_address) = deploy_event_betting();
+    //     let (_dispatcher_ABI, dispatcher_contract, contract_address) = deploy_erc20(
+    //         "ERC20Contract", 200, 0
+    //     );
+    //     let owner: ContractAddress = contract_address_const::<'owner'>();
+    // }
+
+    // fn place_bets_fail_bet_amount_too_high() {
+    //     let (dispatcher, _contract_address) = deploy_event_betting();
+    //     let (_dispatcher_ABI, dispatcher_contract, contract_address) = deploy_erc20(
+    //         "ERC20Contract", 200, 0
+    //     );
+    //     let owner: ContractAddress = contract_address_const::<'owner'>();
+    // }
 }

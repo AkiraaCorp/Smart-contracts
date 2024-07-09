@@ -88,8 +88,8 @@ pub mod EventBetting {
     }
     #[derive(Drop, Copy, Serde, starknet::Store, PartialEq, Eq, Hash)]
     pub struct Odds {
-        no_probability: u64,
-        yes_probability: u64,
+        pub no_probability: u64,
+        pub yes_probability: u64,
     }
 
     #[derive(Drop, Copy, Serde, starknet::Store, PartialEq, Eq, Hash)]
@@ -126,31 +126,29 @@ pub mod EventBetting {
         self.name.write(event_name);
     }
 
-    fn to_u64(value: Fixed) -> u64 {
+    pub fn to_u64(value: Fixed) -> u64 {
         let scale = 100_u64;
+        println!("we gonna mul in to_u64");
         let mag_with_scale = value.mag * scale;
-        if value.sign {
-            mag_with_scale
-        } else {
-            let max_value = 18446744073709551615;
-            max_value - mag_with_scale + 1
-        }
+        println!("mul in to_u64 success");
+        mag_with_scale
     }
 
-    fn from_u64(value: u64) -> Fixed {
-        let scale = 100_u64;
+    pub fn from_u64(value: u64) -> Fixed {
+        let scale = 10000_u64;
         let mag_with_scale = value / scale;
         let sign = value <= 18446744073709551615 / 2;
         Fixed { mag: mag_with_scale, sign }
     }
 
-    fn log_cost(b: Fixed, no_prob: Fixed, yes_prob: Fixed) -> Fixed {
+    pub fn log_cost(b: Fixed, no_prob: Fixed, yes_prob: Fixed) -> Fixed {
         let e_no = no_prob / b.exp();
         let e_yes = yes_prob / b.exp();
+        println!("we gonna mul in log_cost");
         b * (e_no + e_yes).ln()
     }
 
-    fn cost_diff(new: Fixed, initial: Fixed) -> Fixed {
+    pub fn cost_diff(new: Fixed, initial: Fixed) -> Fixed {
         let result_mag = if initial.mag >= new.mag {
             initial.mag - new.mag
         } else {
@@ -401,3 +399,5 @@ pub mod EventBetting {
         }
     }
 }
+
+1000 * 
