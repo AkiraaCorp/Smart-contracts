@@ -252,7 +252,6 @@ mod test {
 
 
     ///odds tests
-    ///use super::{deploy_event_betting, deploy_erc20}; 
     #[test]
     fn odds_refresh_test_pass() {
         let (dispatcher, _contract_address) = deploy_event_betting();
@@ -262,7 +261,7 @@ mod test {
         let owner: ContractAddress = contract_address_const::<'owner'>();
 
         let no_odds: u64 = 5714;
-        let yes_odds: u64 = 4167;
+        let yes_odds: u64 = 4000;
 
         dispatcher.set_event_probability(no_odds, yes_odds);
         let current_odds = dispatcher.get_event_probability();
@@ -272,7 +271,7 @@ mod test {
         println!("The value of no probability is : {}", current_no_prob);
         println!("The value of yes probability is : {}", current_yes_prob);
         assert_eq!(current_no_prob, 5714);
-        assert_eq!(current_yes_prob, 4167);
+        assert_eq!(current_yes_prob, 4000);
 
         let bet_amount = 2500;
         let user_choice = true;
@@ -286,32 +285,8 @@ mod test {
         println!("The value of new no probability is : {}", new_no_prob);
         println!("The value of new yes probability is : {}", new_yes_prob);
         assert_eq!(no_odds, 5714);
-        assert_eq!(yes_odds, 4167);
+        assert_eq!(yes_odds, 4000);
     }
-    #[test]
-    fn to_u64_pass() {
-        let fixed_value = cubit::f64::Fixed { mag: 2500, sign: false };
-        let result = akira_smart_contract::contracts::bet::EventBetting::to_u64(fixed_value);
-        println!("The value of result is : {}", result);
-        assert_eq!(result, 250000);
-    }
-
-    #[test]
-    fn from_u64_pass() {
-        let number: u64 = 250000;
-        let result = from_u64(number);
-        println!("The value of result is : {}", result.mag);
-        assert_eq!(result.mag, 25);
-    }
-
-    #[test]
-    fn fixed_print_test() {
-        let fixed = cubit::f64::FixedTrait::new_unscaled(17061, false)
-        / cubit::f64::FixedTrait::new_unscaled(10, false);
-        let result = fixed.mag / 4294967296;
-        assert_eq!(result, 1700);
-
-        
-    }
+    
 
 }

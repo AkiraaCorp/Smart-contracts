@@ -151,7 +151,7 @@ pub mod EventBetting {
         b * prob_add.mag
     }
 
-    fn cost_diff(new: u64, initial: u64) -> u64 {
+    pub fn cost_diff(new: u64, initial: u64) -> u64 {
         if new >= initial {
             new - initial
         } else {
@@ -377,7 +377,8 @@ pub mod EventBetting {
 
             let bet_amt_fixed = bet_amount * 1000;
 
-            let initial_cost = log_cost(b, current_yes_fixed, current_no_fixed);
+            let initial_cost = log_cost(b, current_no_fixed, current_yes_fixed);
+            println!("The value of initial_cost is : {}", initial_cost);
 
             if user_choice {
                 current_yes_fixed.mag += bet_amt_fixed;
@@ -385,9 +386,11 @@ pub mod EventBetting {
                 current_no_fixed.mag += bet_amt_fixed;
             }
 
-            let new_cost = log_cost(b, current_no_fixed, current_no_fixed);
+            let new_cost = log_cost(b, current_no_fixed, current_yes_fixed);
+            println!("The value of new_cost is : {}", new_cost);
 
             let cost_difference = cost_diff(new_cost, initial_cost);
+            println!("The value of cost_difference is : {}", cost_difference);
 
             if user_choice {
                 current_yes_fixed.mag += cost_difference;
