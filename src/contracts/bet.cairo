@@ -141,20 +141,27 @@ pub mod EventBetting {
         Fixed { mag: mag_with_scale, sign }
     }
 
-    pub fn log_cost(b: Fixed, no_prob: Fixed, yes_prob: Fixed) -> Fixed {
-        let e_no = no_prob / b.exp();
-        let e_yes = yes_prob / b.exp();
+    pub fn log_cost(b: u64, no_prob: Fixed, yes_prob: Fixed) -> u64 {
+        let cost_no = no_prob.mag / b;
+        let cost_yes = yes_prob.mag / b;
+        let fixed_no = Fixed { mag: cost_no, sign: false};
+        let fixed_yes = Fixed { mag: cost_yes, sign: false};
         println!("we gonna mul in log_cost");
-        b * (e_no + e_yes).ln()
+        let prob_add = ln(fixed_no + fixed_yes);
+        b * prob_add.mag
     }
 
-    pub fn cost_diff(new: Fixed, initial: Fixed) -> Fixed {
-        let result_mag = if initial.mag >= new.mag {
-            initial.mag - new.mag
+    fn cost_diff(new: u64, initial: u64) -> u64 {
+        if new >= initial {
+            new - initial
         } else {
-            new.mag - initial.mag
-        };
-        Fixed { mag: result_mag, sign: initial.sign }
+            initial - new
+        }
+    }
+
+    pub fn print_fixed(f: Fixed) {
+        let result = f.mag / 4294967296;
+        println!("The fixed is: {}", result);
     }
 
     impl EventBettingArray of Store<Array<ContractAddress>> {
@@ -359,41 +366,37 @@ pub mod EventBetting {
         }
 
         fn refresh_event_odds(ref self: ContractState, user_choice: bool, bet_amount: u64) {
-            let b = FixedTrait::new_unscaled(1000, false); ///param de la liquidité (voir LMSR)
+            let b: u64 = 3000;
 
             let current_yes = self.get_event_probability().yes_probability;
             let current_no = self.get_event_probability().no_probability;
 
-            let initial_yes_odds = FixedTrait::new_unscaled(current_yes, false)
-                / FixedTrait::new_unscaled(100, false);
-            let initial_no_odds = FixedTrait::new_unscaled(current_no, false)
-                / FixedTrait::new_unscaled(100, false);
+            let mut current_yes_fixed = Fixed { mag: current_yes, sign: false};
+            let mut current_no_fixed = Fixed { mag: current_no, sign: false};
 
-            let mut initial_yes_prob = FixedTrait::new_unscaled(10000, false) / initial_yes_odds;
-            let mut initial_no_prob = FixedTrait::new_unscaled(10000, false) / initial_no_odds;
 
-            let bet_amt_fixed = Fixed { mag: bet_amount, sign: false };
+            let bet_amt_fixed = bet_amount * 1000;
 
-            let initial_cost = log_cost(b, initial_no_prob, initial_yes_prob);
+            let initial_cost = log_cost(b, current_yes_fixed, current_no_fixed);
 
             if user_choice {
-                initial_yes_prob.mag += bet_amt_fixed.mag;
+                current_yes_fixed.mag += bet_amt_fixed;
             } else {
-                initial_no_prob.mag += bet_amt_fixed.mag;
+                current_no_fixed.mag += bet_amt_fixed;
             }
 
-            let new_cost = log_cost(b, initial_no_prob, initial_yes_prob);
+            let new_cost = log_cost(b, current_no_fixed, current_no_fixed);
 
             let cost_difference = cost_diff(new_cost, initial_cost);
 
             if user_choice {
-                initial_yes_prob.mag += cost_difference.mag;
+                current_yes_fixed.mag += cost_difference;
             } else {
-                initial_no_prob.mag += cost_difference.mag;
+                current_no_fixed.mag += cost_difference;
             }
 
             let updated_odds = Odds {
-                no_probability: initial_no_prob.mag, yes_probability: initial_yes_prob.mag,
+                no_probability: current_no_fixed.mag, yes_probability: current_yes_fixed.mag,
             };
             self.event_probability.write(updated_odds);
         }

@@ -1,7 +1,7 @@
 use akira_smart_contract::ERC20::ERC20Contract::{
     IERC20ContractDispatcher, IERC20ContractDispatcherTrait
 };
-use akira_smart_contract::contracts::bet::EventBetting::{to_u64, log_cost, cost_diff, from_u64};
+use akira_smart_contract::contracts::bet::EventBetting::{to_u64, log_cost, cost_diff, from_u64, print_fixed};
 use akira_smart_contract::contracts::bet::{IEventBettingDispatcher, IEventBettingDispatcherTrait};
 use cubit::f64::{math::ops::{ln, exp}, types::fixed::{Fixed, FixedTrait}};
 use openzeppelin::token::erc20::interface::{ERC20ABI, ERC20ABIDispatcher, ERC20ABIDispatcherTrait};
@@ -303,19 +303,15 @@ mod test {
         println!("The value of result is : {}", result.mag);
         assert_eq!(result.mag, 25);
     }
-// fn odds_refresh_test_fail() {
-//     let (dispatcher, _contract_address) = deploy_event_betting();
-//     let (_dispatcher_ABI, dispatcher_contract, contract_address) = deploy_erc20(
-//         "ERC20Contract", 200, 0
-//     );
-//     let owner: ContractAddress = contract_address_const::<'owner'>();
-// }
 
-// fn place_bets_fail_bet_amount_too_high() {
-//     let (dispatcher, _contract_address) = deploy_event_betting();
-//     let (_dispatcher_ABI, dispatcher_contract, contract_address) = deploy_erc20(
-//         "ERC20Contract", 200, 0
-//     );
-//     let owner: ContractAddress = contract_address_const::<'owner'>();
-// }
+    #[test]
+    fn fixed_print_test() {
+        let fixed = cubit::f64::FixedTrait::new_unscaled(17061, false)
+        / cubit::f64::FixedTrait::new_unscaled(10, false);
+        let result = fixed.mag / 4294967296;
+        assert_eq!(result, 1700);
+
+        
+    }
+
 }
