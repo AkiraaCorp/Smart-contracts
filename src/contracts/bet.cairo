@@ -13,7 +13,7 @@ pub trait IEventBetting<TContractState> {
     );
     fn get_bet(self: @TContractState, user_address: ContractAddress) -> EventBetting::UserBet;
     fn get_event_probability(self: @TContractState) -> EventBetting::Odds;
-    fn set_event_probability(ref self: TContractState, no_initial_prob: u64, yes_initial_prob: u64);
+    fn set_event_probability(ref self: TContractState, no_initial_prob: u256, yes_initial_prob: u256);
     fn get_event_outcome(self: @TContractState) -> u8;
     fn get_is_active(self: @TContractState) -> bool;
     fn set_is_active(ref self: TContractState, is_active: bool);
@@ -26,7 +26,7 @@ pub trait IEventBetting<TContractState> {
     fn get_total_bet_bank(self: @TContractState) -> u256;
 
     ///attention cette fonciton ne doit pas etre visible de l'exterieur
-    fn refresh_event_odds(ref self: TContractState, user_choice: bool, bet_amount: u64);
+    fn refresh_event_odds(ref self: TContractState, user_choice: bool, bet_amount: u256);
 ///rajouter fonction pour voir combien l'user peut claim + fonction pour claim
 }
 
@@ -88,8 +88,8 @@ pub mod EventBetting {
     }
     #[derive(Drop, Copy, Serde, starknet::Store, PartialEq, Eq, Hash)]
     pub struct Odds {
-        pub no_probability: u64,
-        pub yes_probability: u64,
+        pub no_probability: u256,
+        pub yes_probability: u256,
     }
 
     #[derive(Drop, Copy, Serde, starknet::Store, PartialEq, Eq, Hash)]
@@ -144,10 +144,13 @@ pub mod EventBetting {
     pub fn log_cost(b: u64, no_prob: Fixed, yes_prob: Fixed) -> u64 {
         let cost_no = no_prob.mag / b;
         let cost_yes = yes_prob.mag / b;
+        println!("cost no = {}", cost_no);
+        println!("cost yes = {}", cost_yes);
         let fixed_no = Fixed { mag: cost_no, sign: false};
         let fixed_yes = Fixed { mag: cost_yes, sign: false};
         println!("we gonna mul in log_cost");
         let prob_add = ln(fixed_no + fixed_yes);
+        println!("logarithm = {}", prob_add.mag);
         b * prob_add.mag
     }
 
@@ -279,10 +282,7 @@ pub mod EventBetting {
                 user_odds: current_odds
             };
 
-            let bet_amount_convert: u64 = bet_amount
-                .try_into()
-                .expect('coulndt convert bet amount');
-            self.refresh_event_odds(user_choice, bet_amount_convert);
+            self.refresh_event_odds(user_choice, total_user_share);
             self.bets.write(user_address, user_bet);
         ///verifier que tout les write dans le storage ont ete fait
 
@@ -297,7 +297,7 @@ pub mod EventBetting {
         }
 
         fn set_event_probability(
-            ref self: ContractState, no_initial_prob: u64, yes_initial_prob: u64
+            ref self: ContractState, no_initial_prob: u256, yes_initial_prob: u256
         ) {
             let initial_probibility = Odds {
                 no_probability: no_initial_prob, yes_probability: yes_initial_prob
@@ -365,43 +365,45 @@ pub mod EventBetting {
             self.total_bet_bank.read()
         }
 
-        fn refresh_event_odds(ref self: ContractState, user_choice: bool, bet_amount: u64) {
-            let b: u64 = 3000;
-
-            let current_yes = self.get_event_probability().yes_probability;
-            let current_no = self.get_event_probability().no_probability;
-
-            let mut current_yes_fixed = Fixed { mag: current_yes, sign: false};
-            let mut current_no_fixed = Fixed { mag: current_no, sign: false};
+        fn refresh_event_odds(ref self: ContractState, user_choice: bool, bet_amount: u256) {
+            let initial_yes_prob = self.get_event_probability().yes_probability;
+            let initial_no_prob = self.get_event_probability().no_probability;
 
 
             let bet_amt_fixed = bet_amount * 1000;
 
-            let initial_cost = log_cost(b, current_no_fixed, current_yes_fixed);
-            println!("The value of initial_cost is : {}", initial_cost);
+            let mut total_yes = self.yes_total_amount.read();
+            let mut total_no = self.no_total_amount.read();
+
+            let initial_yes_amount = initial_yes_prob * 1000;
+            let initial_no_amount = initial_no_prob * 1000;
 
             if user_choice {
-                current_yes_fixed.mag += bet_amt_fixed;
+               total_yes += bet_amt_fixed;
             } else {
-                current_no_fixed.mag += bet_amt_fixed;
+               total_no += bet_amt_fixed;
             }
 
-            let new_cost = log_cost(b, current_no_fixed, current_yes_fixed);
-            println!("The value of new_cost is : {}", new_cost);
 
-            let cost_difference = cost_diff(new_cost, initial_cost);
-            println!("The value of cost_difference is : {}", cost_difference);
+            let adjusted_total_yes = total_yes + initial_yes_amount;
+            let adjusted_total_no = total_no + initial_no_amount;
 
-            if user_choice {
-                current_yes_fixed.mag += cost_difference;
-            } else {
-                current_no_fixed.mag += cost_difference;
-            }
+            let adjusted_total_bet = adjusted_total_yes + adjusted_total_no;
+
+    
+            let new_yes_prob = (adjusted_total_yes * 10000) / adjusted_total_bet;
+            let new_no_prob = (adjusted_total_no * 10000) / adjusted_total_bet;
+
 
             let updated_odds = Odds {
-                no_probability: current_no_fixed.mag, yes_probability: current_yes_fixed.mag,
+                no_probability: new_no_prob,
+                yes_probability: new_yes_prob,
             };
             self.event_probability.write(updated_odds);
+
+            self.yes_total_amount.write(total_yes);
+            self.no_total_amount.write(total_no);
+
         }
     }
 }

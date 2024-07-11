@@ -260,8 +260,8 @@ mod test {
         );
         let owner: ContractAddress = contract_address_const::<'owner'>();
 
-        let no_odds: u64 = 5714;
-        let yes_odds: u64 = 4000;
+        let no_odds: u256 = 5714;
+        let yes_odds: u256 = 4000;
 
         dispatcher.set_event_probability(no_odds, yes_odds);
         let current_odds = dispatcher.get_event_probability();
@@ -284,8 +284,8 @@ mod test {
 
         println!("The value of new no probability is : {}", new_no_prob);
         println!("The value of new yes probability is : {}", new_yes_prob);
-        assert_eq!(no_odds, 5714);
-        assert_eq!(yes_odds, 4000);
+        assert_eq!(new_no_prob, 4678);
+        assert_eq!(new_yes_prob, 5321);
     }
     
 
