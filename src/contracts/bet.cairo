@@ -1,4 +1,4 @@
-use core::hash::Hash;
+//use core::hash::Hash;
 //define a constructor and an the contract blueprint first here
 use starknet::ContractAddress;
 
@@ -30,7 +30,7 @@ pub trait IEventBetting<TContractState> {
     ///attention cette fonciton ne doit pas etre visible de l'exterieur
     fn refresh_event_odds(ref self: TContractState, user_choice: bool, bet_amount: u256);
     fn is_claimable(self: @TContractState, bet_to_claim: EventBetting::UserBet) -> bool;
-    fn claimable_amount(self: @TContractState, user_address: ContractAddress);
+    fn claimable_amount(self: @TContractState, user_address: ContractAddress) -> u256;
     fn claim_reward(ref self: TContractState, user_address: ContractAddress);
 ///rajouter fonction pour voir combien l'user peut claim + fonction pour claim
 }
@@ -43,6 +43,7 @@ pub trait IEventBettingImpl<TContractState> {
 
 #[starknet::contract]
 pub mod EventBetting {
+    use core::starknet::event::EventEmitter;
     use akira_smart_contract::contracts::bet::IEventBetting;
     use core::array::ArrayTrait;
     use core::box::BoxTrait;
@@ -55,7 +56,7 @@ pub mod EventBetting {
     use starknet::SyscallResultTrait;
     use starknet::storage_access::StorageBaseAddress;
     use starknet::{
-        ContractAddress, SyscallResult, Store, ClassHash, get_caller_address, get_contract_address
+        ContractAddress, SyscallResult, Store, ClassHash, get_caller_address, get_contract_address, get_block_timestamp
     };
 
 
@@ -97,19 +98,26 @@ pub mod EventBetting {
         pub yes_probability: u256,
     }
 
+    // events
+    #[event]
+    #[derive(Drop, starknet::Event)]
+    enum Event {
+        BetPlace: BetPlaced,
+        ///Claim: claim, do an event for when a user claim 
+    }
+
+    #[derive(Drop, starknet::Event)]
+    pub struct BetPlaced {
+        user_bet: UserBet,
+        timestamp: u64,
+    }
+
     #[derive(Drop, Copy, Serde, starknet::Store, PartialEq, Eq, Hash)]
     pub enum RegistrationType {
         finite: u64,
         infinite
     }
 
-    // events
-    #[event]
-    #[derive(Drop, starknet::Event)]
-    enum Event {
-        BetPlaced: bet_placed,
-        Claim: claim,
-    }
 
     #[constructor]
     fn constructor(
@@ -292,7 +300,8 @@ pub mod EventBetting {
 
             self.refresh_event_odds(user_choice, total_user_share);
             self.bets.write(user_address, user_bet);
-        ///verifier que tout les write dans le storage ont ete fait
+            let bet_event = BetPlaced { user_bet, timestamp: get_block_timestamp() };
+            self.emit(Event::BetPlace(bet_event));
 
         }
 
@@ -406,36 +415,36 @@ pub mod EventBetting {
             self.yes_total_amount.write(total_yes);
             self.no_total_amount.write(total_no);
         }
-    }
 
-    fn is_claimable(self: @ContractState, bet_to_claim: UserBet) -> bool {
-        assert(self.get_is_active() == false, 'Cant claim, event is running');
-        let user_bet = bet_to_claim.bet;
-        let mut bet_to_outcome: u8 = 0;
-        if user_bet == true {
-            bet_to_outcome = 1;
+        fn is_claimable(self: @ContractState, bet_to_claim: UserBet) -> bool {
+            assert(self.get_is_active() == false, 'Cant claim, event is running');
+            let user_bet = bet_to_claim.bet;
+            let mut bet_to_outcome: u8 = 0;
+            if user_bet == true {
+                bet_to_outcome = 1;
+            }
+            assert(self.get_event_outcome() == bet_to_outcome, 'Cant claim, bet is wrong');
+            assert(bet_to_claim.claimable_amount > 0, 'Claimable amount is not positiv');
+            true
         }
-        assert(self.get_event_outcome() == bet_to_outcome, 'Cant claim, bet is wrong');
-        assert(bet_to_claim.claimable_amount > 0, 'Claimable amount is not positiv');
-        true
+    
+        fn claimable_amount(self: @ContractState, user_address: ContractAddress) -> u256 {
+            let user_bets = self.get_bet_per_user(user_address);
+            let array_length = user_bets.len();
+            let mut i: u32 = 0;
+            let mut total_to_claim = 0;
+            loop {
+                if i > array_length + 1 {
+                    break;
+                }
+                let bet = *user_bets.at(i);
+                if self.is_claimable(bet) == true {
+                    total_to_claim += bet.claimable_amount;
+                }
+            };
+            total_to_claim
+        }
+    
+        fn claim_reward(ref self: ContractState, user_address: ContractAddress) {}
     }
-
-    fn claimable_amount(self: @ContractState, user_address: ContractAddress) -> u256 {
-        let user_bets = self.get_bet_per_user(user_address);
-        let array_length = user_bets.len();
-        let mut i: u32 = 0;
-        let mut total_to_claim = 0;
-        loop {
-            if i > array_length + 1 {
-                break;
-            }
-            let bet = *user_bets.at(i);
-            if self.is_claimable(bet) == true {
-                total_to_claim += bet.claimable_amount;
-            }
-        };
-        total_to_claim
-    }
-
-    fn claim_reward(ref self: ContractState, user_address: ContractAddress) {}
 }
