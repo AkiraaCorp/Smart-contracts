@@ -32,7 +32,7 @@ pub trait IEventBetting<TContractState> {
     fn is_claimable(self: @TContractState, bet_to_claim: EventBetting::UserBet) -> bool;
     fn claimable_amount(self: @TContractState, user_address: ContractAddress);
     fn claim_reward(ref self: TContractState, user_address: ContractAddress);
-    ///rajouter fonction pour voir combien l'user peut claim + fonction pour claim
+///rajouter fonction pour voir combien l'user peut claim + fonction pour claim
 }
 
 pub trait IEventBettingImpl<TContractState> {
@@ -437,7 +437,5 @@ pub mod EventBetting {
         total_to_claim
     }
 
-    fn claim_reward(ref self: ContractState, user_address: ContractAddress) {
-
-    }
+    fn claim_reward(ref self: ContractState, user_address: ContractAddress) {}
 }
