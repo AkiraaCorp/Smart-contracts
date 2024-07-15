@@ -103,6 +103,14 @@ pub mod EventBetting {
         infinite
     }
 
+    // events
+    #[event]
+    #[derive(Drop, starknet::Event)]
+    enum Event {
+        BetPlaced: bet_placed,
+        Claim: claim,
+    }
+
     #[constructor]
     fn constructor(
         ref self: ContractState,
@@ -428,7 +436,7 @@ pub mod EventBetting {
         };
         total_to_claim
     }
-    
+
     fn claim_reward(ref self: ContractState, user_address: ContractAddress) {
 
     }
