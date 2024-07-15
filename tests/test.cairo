@@ -1,7 +1,9 @@
 use akira_smart_contract::ERC20::ERC20Contract::{
     IERC20ContractDispatcher, IERC20ContractDispatcherTrait
 };
-use akira_smart_contract::contracts::bet::EventBetting::{to_u64, log_cost, cost_diff, from_u64, print_fixed};
+use akira_smart_contract::contracts::bet::EventBetting::{
+    to_u64, log_cost, cost_diff, from_u64, print_fixed
+};
 use akira_smart_contract::contracts::bet::{IEventBettingDispatcher, IEventBettingDispatcherTrait};
 use cubit::f64::{math::ops::{ln, exp}, types::fixed::{Fixed, FixedTrait}};
 use openzeppelin::token::erc20::interface::{ERC20ABI, ERC20ABIDispatcher, ERC20ABIDispatcherTrait};
@@ -278,15 +280,27 @@ mod test {
 
         dispatcher.refresh_event_odds(user_choice, bet_amount);
 
-        let new_odds = dispatcher.get_event_probability();
-        let new_no_prob = new_odds.no_probability;
-        let new_yes_prob = new_odds.yes_probability;
+        let mut new_odds = dispatcher.get_event_probability();
+        let mut new_no_prob = new_odds.no_probability;
+        let mut new_yes_prob = new_odds.yes_probability;
 
         println!("The value of new no probability is : {}", new_no_prob);
         println!("The value of new yes probability is : {}", new_yes_prob);
         assert_eq!(new_no_prob, 4678);
         assert_eq!(new_yes_prob, 5321);
-    }
-    
 
+        let re_bet = 3000;
+        let new_user_voice = false;
+
+        dispatcher.refresh_event_odds(user_choice, bet_amount);
+
+        new_odds = dispatcher.get_event_probability();
+        new_no_prob = new_odds.no_probability;
+        new_yes_prob = new_odds.yes_probability;
+
+        println!("The value of new no probability is : {}", new_no_prob);
+        println!("The value of new yes probability is : {}", new_yes_prob);
+        assert_eq!(new_no_prob, 3118);
+        assert_eq!(new_yes_prob, 6881);
+    }
 }

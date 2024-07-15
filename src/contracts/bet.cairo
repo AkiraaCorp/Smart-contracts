@@ -13,7 +13,9 @@ pub trait IEventBetting<TContractState> {
     );
     fn get_bet(self: @TContractState, user_address: ContractAddress) -> EventBetting::UserBet;
     fn get_event_probability(self: @TContractState) -> EventBetting::Odds;
-    fn set_event_probability(ref self: TContractState, no_initial_prob: u256, yes_initial_prob: u256);
+    fn set_event_probability(
+        ref self: TContractState, no_initial_prob: u256, yes_initial_prob: u256
+    );
     fn get_event_outcome(self: @TContractState) -> u8;
     fn get_is_active(self: @TContractState) -> bool;
     fn set_is_active(ref self: TContractState, is_active: bool);
@@ -146,8 +148,8 @@ pub mod EventBetting {
         let cost_yes = yes_prob.mag / b;
         println!("cost no = {}", cost_no);
         println!("cost yes = {}", cost_yes);
-        let fixed_no = Fixed { mag: cost_no, sign: false};
-        let fixed_yes = Fixed { mag: cost_yes, sign: false};
+        let fixed_no = Fixed { mag: cost_no, sign: false };
+        let fixed_yes = Fixed { mag: cost_yes, sign: false };
         println!("we gonna mul in log_cost");
         let prob_add = ln(fixed_no + fixed_yes);
         println!("logarithm = {}", prob_add.mag);
@@ -369,7 +371,6 @@ pub mod EventBetting {
             let initial_yes_prob = self.get_event_probability().yes_probability;
             let initial_no_prob = self.get_event_probability().no_probability;
 
-
             let bet_amt_fixed = bet_amount * 1000;
 
             let mut total_yes = self.yes_total_amount.read();
@@ -379,31 +380,24 @@ pub mod EventBetting {
             let initial_no_amount = initial_no_prob * 1000;
 
             if user_choice {
-               total_yes += bet_amt_fixed;
+                total_yes += bet_amt_fixed;
             } else {
-               total_no += bet_amt_fixed;
+                total_no += bet_amt_fixed;
             }
-
 
             let adjusted_total_yes = total_yes + initial_yes_amount;
             let adjusted_total_no = total_no + initial_no_amount;
 
             let adjusted_total_bet = adjusted_total_yes + adjusted_total_no;
 
-    
             let new_yes_prob = (adjusted_total_yes * 10000) / adjusted_total_bet;
             let new_no_prob = (adjusted_total_no * 10000) / adjusted_total_bet;
 
-
-            let updated_odds = Odds {
-                no_probability: new_no_prob,
-                yes_probability: new_yes_prob,
-            };
+            let updated_odds = Odds { no_probability: new_no_prob, yes_probability: new_yes_prob, };
             self.event_probability.write(updated_odds);
 
             self.yes_total_amount.write(total_yes);
             self.no_total_amount.write(total_no);
-
         }
     }
 }
