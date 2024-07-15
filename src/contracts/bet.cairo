@@ -29,7 +29,10 @@ pub trait IEventBetting<TContractState> {
 
     ///attention cette fonciton ne doit pas etre visible de l'exterieur
     fn refresh_event_odds(ref self: TContractState, user_choice: bool, bet_amount: u256);
-///rajouter fonction pour voir combien l'user peut claim + fonction pour claim
+    fn is_claimable(self: @TContractState, bet_to_claim: EventBetting::UserBet) -> bool;
+    fn claimable_amount(self: @TContractState, user_address: ContractAddress);
+    fn claim_reward(ref self: TContractState, user_address: ContractAddress);
+    ///rajouter fonction pour voir combien l'user peut claim + fonction pour claim
 }
 
 pub trait IEventBettingImpl<TContractState> {
@@ -130,9 +133,7 @@ pub mod EventBetting {
 
     pub fn to_u64(value: Fixed) -> u64 {
         let scale = 100_u64;
-        println!("we gonna mul in to_u64");
         let mag_with_scale = value.mag * scale;
-        println!("mul in to_u64 success");
         mag_with_scale
     }
 
@@ -146,13 +147,9 @@ pub mod EventBetting {
     pub fn log_cost(b: u64, no_prob: Fixed, yes_prob: Fixed) -> u64 {
         let cost_no = no_prob.mag / b;
         let cost_yes = yes_prob.mag / b;
-        println!("cost no = {}", cost_no);
-        println!("cost yes = {}", cost_yes);
         let fixed_no = Fixed { mag: cost_no, sign: false };
         let fixed_yes = Fixed { mag: cost_yes, sign: false };
-        println!("we gonna mul in log_cost");
         let prob_add = ln(fixed_no + fixed_yes);
-        println!("logarithm = {}", prob_add.mag);
         b * prob_add.mag
     }
 
@@ -276,6 +273,7 @@ pub mod EventBetting {
             } else {
                 self.yes_total_amount.write(self.yes_total_amount.read() + total_user_share);
             }
+            ///let potential_reward = 
             let user_bet = UserBet {
                 bet: user_choice,
                 amount: total_user_share,
@@ -368,6 +366,7 @@ pub mod EventBetting {
         }
 
         fn refresh_event_odds(ref self: ContractState, user_choice: bool, bet_amount: u256) {
+            ///si calcule trop sensible, on peut ajouter un alpha de 0.75-0.85 pour lisser
             let initial_yes_prob = self.get_event_probability().yes_probability;
             let initial_no_prob = self.get_event_probability().no_probability;
 
@@ -399,5 +398,38 @@ pub mod EventBetting {
             self.yes_total_amount.write(total_yes);
             self.no_total_amount.write(total_no);
         }
+    }
+
+    fn is_claimable(self: @ContractState, bet_to_claim: UserBet) -> bool {
+        assert(self.get_is_active() == false, 'Cant claim, event is running');
+        let user_bet = bet_to_claim.bet;
+        let mut bet_to_outcome: u8 = 0;
+        if user_bet == true {
+            bet_to_outcome = 1;
+        }
+        assert(self.get_event_outcome() == bet_to_outcome, 'Cant claim, bet is wrong');
+        assert(bet_to_claim.claimable_amount > 0, 'Claimable amount is not positiv');
+        true
+    }
+
+    fn claimable_amount(self: @ContractState, user_address: ContractAddress) -> u256 {
+        let user_bets = self.get_bet_per_user(user_address);
+        let array_length = user_bets.len();
+        let mut i: u32 = 0;
+        let mut total_to_claim = 0;
+        loop {
+            if i > array_length + 1 {
+                break;
+            }
+            let bet = *user_bets.at(i);
+            if self.is_claimable(bet) == true {
+                total_to_claim += bet.claimable_amount;
+            }
+        };
+        total_to_claim
+    }
+    
+    fn claim_reward(ref self: ContractState, user_address: ContractAddress) {
+
     }
 }
