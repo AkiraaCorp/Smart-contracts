@@ -28,7 +28,7 @@ pub trait IEventBetting<TContractState> {
     fn get_total_bet_bank(self: @TContractState) -> u256;
 
     ///attention cette fonciton ne doit pas etre visible de l'exterieur
-    fn refresh_event_odds(ref self: TContractState, user_choice: bool, bet_amount: u256);
+    //fn refresh_event_odds(ref self: TContractState, user_choice: bool, bet_amount: u256);
     fn is_claimable(self: @TContractState, bet_to_claim: EventBetting::UserBet) -> bool;
     fn claimable_amount(self: @TContractState, user_address: ContractAddress) -> u256;
     fn claim_reward(ref self: TContractState, user_address: ContractAddress);
@@ -43,12 +43,12 @@ pub trait IEventBettingImpl<TContractState> {
 
 #[starknet::contract]
 pub mod EventBetting {
-    use core::starknet::event::EventEmitter;
     use akira_smart_contract::contracts::bet::IEventBetting;
     use core::array::ArrayTrait;
     use core::box::BoxTrait;
     use core::num::traits::zero::Zero;
     use core::option::OptionTrait;
+    use core::starknet::event::EventEmitter;
     use core::traits::TryInto;
     use cubit::f64::{math::ops::{ln, exp}, types::fixed::{Fixed, FixedTrait}};
     use openzeppelin::token::erc20::interface::IERC20Dispatcher;
@@ -56,11 +56,12 @@ pub mod EventBetting {
     use starknet::SyscallResultTrait;
     use starknet::storage_access::StorageBaseAddress;
     use starknet::{
-        ContractAddress, SyscallResult, Store, ClassHash, get_caller_address, get_contract_address, get_block_timestamp
+        ContractAddress, SyscallResult, Store, ClassHash, get_caller_address, get_contract_address,
+        get_block_timestamp
     };
 
 
-    const PLATFORM_FEE: u256 = 5;
+    const PLATFORM_FEE: u256 = 8;
     #[storage]
     struct Storage {
         name: felt252,
@@ -103,7 +104,7 @@ pub mod EventBetting {
     #[derive(Drop, starknet::Event)]
     enum Event {
         BetPlace: BetPlaced,
-        ///Claim: claim, do an event for when a user claim 
+    ///Claim: claim, do an event for when a user claim 
     }
 
     #[derive(Drop, starknet::Event)]
@@ -132,7 +133,7 @@ pub mod EventBetting {
         self.no_share_token_address.write(token_no_address);
         self.yes_share_token_address.write(token_yes_adress);
         self.bank_wallet.write(bank_wallet);
-        self.is_active.write(false);
+        self.is_active.write(true);
         self.event_outcome.write(2);
         self.yes_count.write(0);
         self.no_count.write(0);
@@ -284,25 +285,26 @@ pub mod EventBetting {
             let total_user_share = bet_amount - (bet_amount * PLATFORM_FEE / 100);
             self.bets_count.write(self.bets_count.read() + 1);
             self.total_bet_bank.write(self.total_bet_bank.read() + total_user_share);
+            let mut user_odds = current_odds.no_probability;
             if user_choice == false {
                 self.no_total_amount.write(self.no_total_amount.read() + total_user_share);
             } else {
+                user_odds = current_odds.yes_probability;
                 self.yes_total_amount.write(self.yes_total_amount.read() + total_user_share);
             }
-            ///let potential_reward = 
+            let potential_reward = (total_user_share * 10000) / user_odds;
             let user_bet = UserBet {
                 bet: user_choice,
                 amount: total_user_share,
                 has_claimed: false,
-                claimable_amount: 0,
+                claimable_amount: potential_reward,
                 user_odds: current_odds
             };
 
-            self.refresh_event_odds(user_choice, total_user_share);
+            refresh_event_odds(ref self, user_choice, total_user_share);
             self.bets.write(user_address, user_bet);
             let bet_event = BetPlaced { user_bet, timestamp: get_block_timestamp() };
             self.emit(Event::BetPlace(bet_event));
-
         }
 
         fn get_bet(self: @ContractState, user_address: ContractAddress) -> UserBet {
@@ -382,40 +384,6 @@ pub mod EventBetting {
             self.total_bet_bank.read()
         }
 
-        fn refresh_event_odds(ref self: ContractState, user_choice: bool, bet_amount: u256) {
-            ///si calcule trop sensible, on peut ajouter un alpha de 0.75-0.85 pour lisser
-            let initial_yes_prob = self.get_event_probability().yes_probability;
-            let initial_no_prob = self.get_event_probability().no_probability;
-
-            let bet_amt_fixed = bet_amount * 1000;
-
-            let mut total_yes = self.yes_total_amount.read();
-            let mut total_no = self.no_total_amount.read();
-
-            let initial_yes_amount = initial_yes_prob * 1000;
-            let initial_no_amount = initial_no_prob * 1000;
-
-            if user_choice {
-                total_yes += bet_amt_fixed;
-            } else {
-                total_no += bet_amt_fixed;
-            }
-
-            let adjusted_total_yes = total_yes + initial_yes_amount;
-            let adjusted_total_no = total_no + initial_no_amount;
-
-            let adjusted_total_bet = adjusted_total_yes + adjusted_total_no;
-
-            let new_yes_prob = (adjusted_total_yes * 10000) / adjusted_total_bet;
-            let new_no_prob = (adjusted_total_no * 10000) / adjusted_total_bet;
-
-            let updated_odds = Odds { no_probability: new_no_prob, yes_probability: new_yes_prob, };
-            self.event_probability.write(updated_odds);
-
-            self.yes_total_amount.write(total_yes);
-            self.no_total_amount.write(total_no);
-        }
-
         fn is_claimable(self: @ContractState, bet_to_claim: UserBet) -> bool {
             assert(self.get_is_active() == false, 'Cant claim, event is running');
             let user_bet = bet_to_claim.bet;
@@ -427,7 +395,7 @@ pub mod EventBetting {
             assert(bet_to_claim.claimable_amount > 0, 'Claimable amount is not positiv');
             true
         }
-    
+
         fn claimable_amount(self: @ContractState, user_address: ContractAddress) -> u256 {
             let user_bets = self.get_bet_per_user(user_address);
             let array_length = user_bets.len();
@@ -444,7 +412,43 @@ pub mod EventBetting {
             };
             total_to_claim
         }
-    
+
         fn claim_reward(ref self: ContractState, user_address: ContractAddress) {}
     }
+
+    //internal function, no visibility from outside
+    pub fn refresh_event_odds(ref self: ContractState, user_choice: bool, bet_amount: u256) {
+        ///si calcule trop sensible, on peut ajouter un alpha de 0.75-0.85 pour lisser
+        let initial_yes_prob = self.get_event_probability().yes_probability;
+        let initial_no_prob = self.get_event_probability().no_probability;
+
+        let bet_amt_fixed = bet_amount * 1000;
+
+        let mut total_yes = self.yes_total_amount.read();
+        let mut total_no = self.no_total_amount.read();
+
+        let initial_yes_amount = initial_yes_prob * 1000;
+        let initial_no_amount = initial_no_prob * 1000;
+
+        if user_choice {
+            total_yes += bet_amt_fixed;
+        } else {
+            total_no += bet_amt_fixed;
+        }
+
+        let adjusted_total_yes = total_yes + initial_yes_amount;
+        let adjusted_total_no = total_no + initial_no_amount;
+
+        let adjusted_total_bet = adjusted_total_yes + adjusted_total_no;
+
+        let new_yes_prob = (adjusted_total_yes * 10000) / adjusted_total_bet;
+        let new_no_prob = (adjusted_total_no * 10000) / adjusted_total_bet;
+
+        let updated_odds = Odds { no_probability: new_no_prob, yes_probability: new_yes_prob, };
+        self.event_probability.write(updated_odds);
+
+        self.yes_total_amount.write(total_yes);
+        self.no_total_amount.write(total_no);
+    }
 }
+

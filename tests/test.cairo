@@ -69,7 +69,9 @@ mod test {
 
     // }
 
-    use akira_smart_contract::contracts::bet::EventBetting::{to_u64, log_cost, cost_diff, from_u64};
+    use akira_smart_contract::contracts::bet::EventBetting::{
+        to_u64, log_cost, cost_diff, from_u64, refresh_event_odds
+    };
     use akira_smart_contract::contracts::bet::{
         IEventBettingDispatcher, IEventBettingDispatcherTrait
     };
@@ -256,7 +258,7 @@ mod test {
     ///odds tests
     #[test]
     fn odds_refresh_test_pass() {
-        let (dispatcher, _contract_address) = deploy_event_betting();
+        let (mut dispatcher, _contract_address) = deploy_event_betting();
         let (_dispatcher_ABI, dispatcher_contract, contract_address) = deploy_erc20(
             "ERC20Contract", 200, 0
         );
@@ -265,6 +267,7 @@ mod test {
         let no_odds: u256 = 5714;
         let yes_odds: u256 = 4000;
 
+        dispatcher.set_is_active(true);
         dispatcher.set_event_probability(no_odds, yes_odds);
         let current_odds = dispatcher.get_event_probability();
         let current_no_prob = current_odds.no_probability;
@@ -278,7 +281,10 @@ mod test {
         let bet_amount = 2500;
         let user_choice = true;
 
-        dispatcher.refresh_event_odds(user_choice, bet_amount);
+        // start_cheat_caller_address(contract_address, owner);
+        // dispatcher.set_is_active(true);
+
+        dispatcher.place_bet(owner, bet_amount, user_choice);
 
         let mut new_odds = dispatcher.get_event_probability();
         let mut new_no_prob = new_odds.no_probability;
@@ -290,9 +296,9 @@ mod test {
         assert_eq!(new_yes_prob, 5321);
 
         let re_bet = 3000;
-        let new_user_voice = false;
+        let new_user_choice = false;
 
-        dispatcher.refresh_event_odds(user_choice, bet_amount);
+        dispatcher.place_bet(owner, re_bet, new_user_choice);
 
         new_odds = dispatcher.get_event_probability();
         new_no_prob = new_odds.no_probability;
