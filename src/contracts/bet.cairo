@@ -281,9 +281,24 @@ pub mod EventBetting {
                 dispatcher =
                     IERC20Dispatcher { contract_address: self.yes_share_token_address.read() };
             }
-            let tx: bool = dispatcher
-                .transfer_from(get_caller_address(), get_contract_address(), bet_amount);
-            dispatcher.transfer(self.bank_wallet.read(), bet_amount * PLATFORM_FEE / 100);
+
+            let STRK_ADDRESS: ContractAddress = contract_address_const::<
+                0x04718f5a0fc34cc1af16a1cdee98ffb20c31f5cd61d6ab07201858f4287c938d
+            >();
+            //STRK approve
+            let tx: bool = dispatcher.approve(STRK_ADDRESS, bet_amount);
+            assert(tx == true, 'STRK fail to approve');
+
+            //STRK deposit
+            assert(
+                dispatcher.transfer_from(user_address, self.bank_wallet.read(), bet_amount),
+                'transfer_from failed'
+            ); //here just check if we use a bank wallet or maybe just send STRK directly on this contract or into ERC20 contracts
+
+            dispatcher
+                .transfer(
+                    self.bank_wallet.read(), bet_amount * PLATFORM_FEE / 100
+                ); //maybe dont transfer, just mint
             let total_user_share = bet_amount - (bet_amount * PLATFORM_FEE / 100);
             self.bets_count.write(self.bets_count.read() + 1);
             self.total_bet_bank.write(self.total_bet_bank.read() + total_user_share);
@@ -434,7 +449,7 @@ pub mod EventBetting {
                 }
                     .transfer_from(
                         user_address, self.get_owner(), user_no_balance
-                    ); //check this line
+                    ); //check this line Maybe better to burn tokens
                 assert(transfer == true, 'transfer failed');
 
                 let STRK_ADDRESS: ContractAddress = contract_address_const::<
@@ -445,9 +460,9 @@ pub mod EventBetting {
                 let strk_transfer = IERC20Dispatcher { contract_address: STRK_ADDRESS }
                     .transfer_from(
                         self.get_owner(), user_address, user_no_balance
-                    ); //check this line  
+                    ); //check this line Maybe better to burn tokens
                 assert(strk_transfer == true, 'STRK transfer failed');
-                //let bet_event = BetPlaced { user_bet, timestamp: get_block_timestamp() };
+
                 let claim_event = BetClaimed {
                     event_name: self.get_name(),
                     amount_claimed: user_no_balance,
