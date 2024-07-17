@@ -1,12 +1,10 @@
-//use core::hash::Hash;
-//define a constructor and an the contract blueprint first here
 use starknet::ContractAddress;
 
 
 #[starknet::interface]
 pub trait IEventBetting<TContractState> {
     fn store_name(ref self: TContractState, name: felt252);
-    fn get_name(self: @TContractState, address: ContractAddress) -> felt252;
+    fn get_name(self: @TContractState) -> felt252;
     fn get_owner(self: @TContractState) -> ContractAddress;
     fn place_bet(
         ref self: TContractState, user_address: ContractAddress, bet_amount: u256, bet: bool
@@ -27,17 +25,13 @@ pub trait IEventBetting<TContractState> {
     ) -> Array<EventBetting::UserBet>;
     fn get_total_bet_bank(self: @TContractState) -> u256;
 
-    ///attention cette fonciton ne doit pas etre visible de l'exterieur
-    //fn refresh_event_odds(ref self: TContractState, user_choice: bool, bet_amount: u256);
     fn is_claimable(self: @TContractState, bet_to_claim: EventBetting::UserBet) -> bool;
     fn claimable_amount(self: @TContractState, user_address: ContractAddress) -> u256;
     fn claim_reward(ref self: TContractState, user_address: ContractAddress);
-///rajouter fonction pour voir combien l'user peut claim + fonction pour claim
 }
 
 pub trait IEventBettingImpl<TContractState> {
     fn bet_is_over(self: @TContractState) -> bool;
-
     fn refresh_odds(self: @TContractState, odds: EventBetting::Odds) -> u256;
 }
 
@@ -57,11 +51,11 @@ pub mod EventBetting {
     use starknet::storage_access::StorageBaseAddress;
     use starknet::{
         ContractAddress, SyscallResult, Store, ClassHash, get_caller_address, get_contract_address,
-        get_block_timestamp
+        get_block_timestamp, contract_address_const,
     };
 
 
-    const PLATFORM_FEE: u256 = 8;
+    const PLATFORM_FEE: u256 = 7;
     #[storage]
     struct Storage {
         name: felt252,
@@ -104,12 +98,20 @@ pub mod EventBetting {
     #[derive(Drop, starknet::Event)]
     enum Event {
         BetPlace: BetPlaced,
-    ///Claim: claim, do an event for when a user claim 
+        Claim: BetClaimed, 
     }
 
     #[derive(Drop, starknet::Event)]
     pub struct BetPlaced {
         user_bet: UserBet,
+        timestamp: u64,
+    }
+
+    #[derive(Drop, starknet::Event)]
+    pub struct BetClaimed {
+        event_name: felt252,
+        amount_claimed: u256,
+        event_outcome: u8,
         timestamp: u64,
     }
 
@@ -141,7 +143,7 @@ pub mod EventBetting {
         self.no_total_amount.write(0);
         self.total_names.write(0);
         self.bets_count.write(0);
-        let probability = Odds { no_probability: 100, yes_probability: 100 };
+        let probability = Odds { no_probability: 4000, yes_probability: 4000 };
         self.event_probability.write(probability);
         let array_key: Array<ContractAddress> = array![];
         self.bets_key.write(array_key);
@@ -252,7 +254,7 @@ pub mod EventBetting {
             self.name.write(name);
         }
 
-        fn get_name(self: @ContractState, address: ContractAddress) -> felt252 {
+        fn get_name(self: @ContractState) -> felt252 {
             self.name.read()
         }
 
@@ -318,6 +320,7 @@ pub mod EventBetting {
         fn set_event_probability(
             ref self: ContractState, no_initial_prob: u256, yes_initial_prob: u256
         ) {
+            assert(get_caller_address() == self.owner.read(), 'Only owner can do that');
             let initial_probibility = Odds {
                 no_probability: no_initial_prob, yes_probability: yes_initial_prob
             };
@@ -393,6 +396,8 @@ pub mod EventBetting {
             }
             assert(self.get_event_outcome() == bet_to_outcome, 'Cant claim, bet is wrong');
             assert(bet_to_claim.claimable_amount > 0, 'Claimable amount is not positiv');
+            assert(bet_to_claim.has_claimed == false, 'Bet already claimed');
+            //bet_to_claim.has_claimed.write(true); we have to declare the bet 'claimed'
             true
         }
 
@@ -413,11 +418,49 @@ pub mod EventBetting {
             total_to_claim
         }
 
-        fn claim_reward(ref self: ContractState, user_address: ContractAddress) {}
+        ///Need to test this function ! (Charles review if possible)
+        fn claim_reward(ref self: ContractState, user_address: ContractAddress) {
+            assert(self.get_event_outcome() != 2, 'Event not finished yet');
+            assert(get_caller_address() == user_address, 'Not allowed');
+            if self.get_event_outcome() == 0 {
+                let user_no_balance = IERC20Dispatcher { contract_address: self.no_share_token_address.read() }.balance_of(user_address);
+                assert(user_no_balance > 0, 'No tokens to exhange');
+
+                let transfer = IERC20Dispatcher { contract_address: self.no_share_token_address.read() }.transfer_from(user_address, self.get_owner() , user_no_balance); //check this line
+                assert(transfer == true, 'transfer failed');
+
+                let STRK_ADDRESS: ContractAddress = contract_address_const::<0x04718f5a0fc34cc1af16a1cdee98ffb20c31f5cd61d6ab07201858f4287c938d>();
+
+                //transfer STRK token to user
+                let strk_transfer = IERC20Dispatcher { contract_address: STRK_ADDRESS }.transfer_from(self.get_owner(), user_address, user_no_balance); //check this line  
+                assert(strk_transfer == true, 'STRK transfer failed');
+                //let bet_event = BetPlaced { user_bet, timestamp: get_block_timestamp() };
+                let claim_event = BetClaimed { event_name: self.get_name(), amount_claimed: user_no_balance, event_outcome: self.get_event_outcome(), timestamp: get_block_timestamp() };
+                self.emit(Event::Claim(claim_event));
+            }
+
+            if self.get_event_outcome() == 1 {
+                let user_yes_balance = IERC20Dispatcher { contract_address: self.yes_share_token_address.read() }.balance_of(user_address);
+                assert(user_yes_balance > 0, 'No tokens to exhange');
+
+                let transfer = IERC20Dispatcher { contract_address: self.yes_share_token_address.read() }.transfer_from(user_address, self.get_owner() , user_yes_balance); //check this line
+                assert(transfer == true, 'transfer failed');
+
+                let STRK_ADDRESS: ContractAddress = contract_address_const::<0x04718f5a0fc34cc1af16a1cdee98ffb20c31f5cd61d6ab07201858f4287c938d>();
+
+                //transfer STRK token to user
+                let strk_transfer = IERC20Dispatcher { contract_address: STRK_ADDRESS }.transfer_from(self.get_owner(), user_address, user_yes_balance); //check this line  
+                assert(strk_transfer == true, 'STRK transfer failed');
+                //let bet_event = BetPlaced { user_bet, timestamp: get_block_timestamp() };
+                let claim_event = BetClaimed { event_name: self.get_name(), amount_claimed: user_yes_balance, event_outcome: self.get_event_outcome(), timestamp: get_block_timestamp() };
+                self.emit(Event::Claim(claim_event));
+
+            }
+        }
     }
 
     //internal function, no visibility from outside
-    pub fn refresh_event_odds(ref self: ContractState, user_choice: bool, bet_amount: u256) {
+    fn refresh_event_odds(ref self: ContractState, user_choice: bool, bet_amount: u256) {
         ///si calcule trop sensible, on peut ajouter un alpha de 0.75-0.85 pour lisser
         let initial_yes_prob = self.get_event_probability().yes_probability;
         let initial_no_prob = self.get_event_probability().no_probability;
