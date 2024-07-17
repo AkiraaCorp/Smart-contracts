@@ -98,7 +98,7 @@ pub mod EventBetting {
     #[derive(Drop, starknet::Event)]
     enum Event {
         BetPlace: BetPlaced,
-        Claim: BetClaimed, 
+        Claim: BetClaimed,
     }
 
     #[derive(Drop, starknet::Event)]
@@ -423,38 +423,73 @@ pub mod EventBetting {
             assert(self.get_event_outcome() != 2, 'Event not finished yet');
             assert(get_caller_address() == user_address, 'Not allowed');
             if self.get_event_outcome() == 0 {
-                let user_no_balance = IERC20Dispatcher { contract_address: self.no_share_token_address.read() }.balance_of(user_address);
+                let user_no_balance = IERC20Dispatcher {
+                    contract_address: self.no_share_token_address.read()
+                }
+                    .balance_of(user_address);
                 assert(user_no_balance > 0, 'No tokens to exhange');
 
-                let transfer = IERC20Dispatcher { contract_address: self.no_share_token_address.read() }.transfer_from(user_address, self.get_owner() , user_no_balance); //check this line
+                let transfer = IERC20Dispatcher {
+                    contract_address: self.no_share_token_address.read()
+                }
+                    .transfer_from(
+                        user_address, self.get_owner(), user_no_balance
+                    ); //check this line
                 assert(transfer == true, 'transfer failed');
 
-                let STRK_ADDRESS: ContractAddress = contract_address_const::<0x04718f5a0fc34cc1af16a1cdee98ffb20c31f5cd61d6ab07201858f4287c938d>();
+                let STRK_ADDRESS: ContractAddress = contract_address_const::<
+                    0x04718f5a0fc34cc1af16a1cdee98ffb20c31f5cd61d6ab07201858f4287c938d
+                >();
 
                 //transfer STRK token to user
-                let strk_transfer = IERC20Dispatcher { contract_address: STRK_ADDRESS }.transfer_from(self.get_owner(), user_address, user_no_balance); //check this line  
+                let strk_transfer = IERC20Dispatcher { contract_address: STRK_ADDRESS }
+                    .transfer_from(
+                        self.get_owner(), user_address, user_no_balance
+                    ); //check this line  
                 assert(strk_transfer == true, 'STRK transfer failed');
                 //let bet_event = BetPlaced { user_bet, timestamp: get_block_timestamp() };
-                let claim_event = BetClaimed { event_name: self.get_name(), amount_claimed: user_no_balance, event_outcome: self.get_event_outcome(), timestamp: get_block_timestamp() };
+                let claim_event = BetClaimed {
+                    event_name: self.get_name(),
+                    amount_claimed: user_no_balance,
+                    event_outcome: self.get_event_outcome(),
+                    timestamp: get_block_timestamp()
+                };
                 self.emit(Event::Claim(claim_event));
             }
 
             if self.get_event_outcome() == 1 {
-                let user_yes_balance = IERC20Dispatcher { contract_address: self.yes_share_token_address.read() }.balance_of(user_address);
+                let user_yes_balance = IERC20Dispatcher {
+                    contract_address: self.yes_share_token_address.read()
+                }
+                    .balance_of(user_address);
                 assert(user_yes_balance > 0, 'No tokens to exhange');
 
-                let transfer = IERC20Dispatcher { contract_address: self.yes_share_token_address.read() }.transfer_from(user_address, self.get_owner() , user_yes_balance); //check this line
+                let transfer = IERC20Dispatcher {
+                    contract_address: self.yes_share_token_address.read()
+                }
+                    .transfer_from(
+                        user_address, self.get_owner(), user_yes_balance
+                    ); //check this line
                 assert(transfer == true, 'transfer failed');
 
-                let STRK_ADDRESS: ContractAddress = contract_address_const::<0x04718f5a0fc34cc1af16a1cdee98ffb20c31f5cd61d6ab07201858f4287c938d>();
+                let STRK_ADDRESS: ContractAddress = contract_address_const::<
+                    0x04718f5a0fc34cc1af16a1cdee98ffb20c31f5cd61d6ab07201858f4287c938d
+                >();
 
                 //transfer STRK token to user
-                let strk_transfer = IERC20Dispatcher { contract_address: STRK_ADDRESS }.transfer_from(self.get_owner(), user_address, user_yes_balance); //check this line  
+                let strk_transfer = IERC20Dispatcher { contract_address: STRK_ADDRESS }
+                    .transfer_from(
+                        self.get_owner(), user_address, user_yes_balance
+                    ); //check this line  
                 assert(strk_transfer == true, 'STRK transfer failed');
                 //let bet_event = BetPlaced { user_bet, timestamp: get_block_timestamp() };
-                let claim_event = BetClaimed { event_name: self.get_name(), amount_claimed: user_yes_balance, event_outcome: self.get_event_outcome(), timestamp: get_block_timestamp() };
+                let claim_event = BetClaimed {
+                    event_name: self.get_name(),
+                    amount_claimed: user_yes_balance,
+                    event_outcome: self.get_event_outcome(),
+                    timestamp: get_block_timestamp()
+                };
                 self.emit(Event::Claim(claim_event));
-
             }
         }
     }
