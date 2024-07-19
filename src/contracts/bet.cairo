@@ -414,27 +414,30 @@ pub mod EventBetting {
                 bet_to_outcome = 1;
             }
             assert(self.get_event_outcome() == bet_to_outcome, 'Cant claim, bet is wrong');
-            assert(bet_to_claim.claimable_amount > 0, 'Claimable amount is not positiv');
-            assert(bet_to_claim.has_claimed == false, 'Bet already claimed');
-            //bet_to_claim.has_claimed.write(true); we have to declare the bet 'claimed'
+            assert(bet_to_claim.claimable_amount > 0, 'Nothing to claim');
             true
         }
 
         fn claimable_amount(self: @ContractState, user_address: ContractAddress) -> u256 {
-            let user_bets = self.get_bet_per_user(user_address);
-            let array_length = user_bets.len();
-            let mut i: u32 = 0;
-            let mut total_to_claim = 0;
-            loop {
-                if i > array_length + 1 {
-                    break;
+            let event_outcome = self.get_event_outcome();
+            assert(event_outcome != 2, 'No outcome yet');
+            let mut balance = 0;
+            if event_outcome == 0 {
+                let user_no_balance = ERC20Contract::IERC20ContractDispatcher {
+                    contract_address: self.no_share_token_address.read()
                 }
-                let bet = *user_bets.at(i);
-                if self.is_claimable(bet) == true {
-                    total_to_claim += bet.claimable_amount;
+                    .get_balance_of(user_address);
+                assert(user_no_balance > 0, 'No tokens to claim');
+                balance = user_no_balance;
+            } else {
+                let user_yes_balance = ERC20Contract::IERC20ContractDispatcher {
+                    contract_address: self.yes_share_token_address.read()
                 }
-            };
-            total_to_claim
+                    .get_balance_of(user_address);
+                assert(user_yes_balance > 0, 'No tokens to claim');
+                balance = user_yes_balance;
+            }
+            balance
         }
 
         ///Need to test this function ! (Charles review if possible)
