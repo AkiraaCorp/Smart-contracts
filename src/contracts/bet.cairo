@@ -37,6 +37,7 @@ pub trait IEventBettingImpl<TContractState> {
 
 #[starknet::contract]
 pub mod EventBetting {
+    use akira_smart_contract::ERC20::ERC20Contract::IERC20ContractDispatcherTrait;
     use akira_smart_contract::contracts::bet::IEventBetting;
     use core::array::ArrayTrait;
     use core::box::BoxTrait;
@@ -53,6 +54,7 @@ pub mod EventBetting {
         ContractAddress, SyscallResult, Store, ClassHash, get_caller_address, get_contract_address,
         get_block_timestamp, contract_address_const,
     };
+    use super::super::super::ERC20::ERC20Contract;
 
 
     const PLATFORM_FEE: u256 = 7;
@@ -273,33 +275,35 @@ pub mod EventBetting {
             let user_choice = bet;
             let contract_address =
                 get_caller_address(); ///ici mettre une vraie addresse avec les tokens yes et no
-            let mut dispatcher = IERC20Dispatcher { contract_address };
+            let mut dispatcher = ERC20Contract::IERC20ContractDispatcher { contract_address };
             if user_choice == false {
                 dispatcher =
-                    IERC20Dispatcher { contract_address: self.no_share_token_address.read() };
+                    ERC20Contract::IERC20ContractDispatcher {
+                        contract_address: self.no_share_token_address.read()
+                    };
             } else {
                 dispatcher =
-                    IERC20Dispatcher { contract_address: self.yes_share_token_address.read() };
+                    ERC20Contract::IERC20ContractDispatcher {
+                        contract_address: self.yes_share_token_address.read()
+                    };
             }
 
             let STRK_ADDRESS: ContractAddress = contract_address_const::<
                 0x04718f5a0fc34cc1af16a1cdee98ffb20c31f5cd61d6ab07201858f4287c938d
             >();
-            //STRK approve
-            let tx: bool = dispatcher.approve(STRK_ADDRESS, bet_amount);
-            assert(tx == true, 'STRK fail to approve');
-
+            //STRK approve = le multicall et l'approve se font directement dans le front
             //STRK deposit
+            let stark_token = IERC20Dispatcher { contract_address: STRK_ADDRESS };
+
             assert(
-                dispatcher.transfer_from(user_address, self.bank_wallet.read(), bet_amount),
+                stark_token.transfer_from(user_address, self.bank_wallet.read(), bet_amount),
                 'transfer_from failed'
             ); //here just check if we use a bank wallet or maybe just send STRK directly on this contract or into ERC20 contracts
 
-            dispatcher
-                .transfer(
-                    self.bank_wallet.read(), bet_amount * PLATFORM_FEE / 100
-                ); //maybe dont transfer, just mint
+            //MINT token to user
             let total_user_share = bet_amount - (bet_amount * PLATFORM_FEE / 100);
+            dispatcher.mint(user_address, total_user_share);
+
             self.bets_count.write(self.bets_count.read() + 1);
             self.total_bet_bank.write(self.total_bet_bank.read() + total_user_share);
             let mut user_odds = current_odds.no_probability;
@@ -438,19 +442,17 @@ pub mod EventBetting {
             assert(self.get_event_outcome() != 2, 'Event not finished yet');
             assert(get_caller_address() == user_address, 'Not allowed');
             if self.get_event_outcome() == 0 {
-                let user_no_balance = IERC20Dispatcher {
+                let user_no_balance = ERC20Contract::IERC20ContractDispatcher {
                     contract_address: self.no_share_token_address.read()
                 }
-                    .balance_of(user_address);
-                assert(user_no_balance > 0, 'No tokens to exhange');
-
-                let transfer = IERC20Dispatcher {
+                    .get_balance_of(user_address);
+                assert(user_no_balance > 0, 'No tokens to exchange');
+                let transfer = ERC20Contract::IERC20ContractDispatcher {
                     contract_address: self.no_share_token_address.read()
                 }
-                    .transfer_from(
-                        user_address, self.get_owner(), user_no_balance
+                    .burn(
+                        user_address, user_no_balance
                     ); //check this line Maybe better to burn tokens
-                assert(transfer == true, 'transfer failed');
 
                 let STRK_ADDRESS: ContractAddress = contract_address_const::<
                     0x04718f5a0fc34cc1af16a1cdee98ffb20c31f5cd61d6ab07201858f4287c938d
@@ -473,19 +475,16 @@ pub mod EventBetting {
             }
 
             if self.get_event_outcome() == 1 {
-                let user_yes_balance = IERC20Dispatcher {
+                let user_yes_balance = ERC20Contract::IERC20ContractDispatcher {
                     contract_address: self.yes_share_token_address.read()
                 }
-                    .balance_of(user_address);
-                assert(user_yes_balance > 0, 'No tokens to exhange');
+                    .get_balance_of(user_address);
+                assert(user_yes_balance > 0, 'No tokens to exchange');
 
-                let transfer = IERC20Dispatcher {
+                let transfer = ERC20Contract::IERC20ContractDispatcher {
                     contract_address: self.yes_share_token_address.read()
                 }
-                    .transfer_from(
-                        user_address, self.get_owner(), user_yes_balance
-                    ); //check this line
-                assert(transfer == true, 'transfer failed');
+                    .burn(user_address, user_yes_balance);
 
                 let STRK_ADDRESS: ContractAddress = contract_address_const::<
                     0x04718f5a0fc34cc1af16a1cdee98ffb20c31f5cd61d6ab07201858f4287c938d
