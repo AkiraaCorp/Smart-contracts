@@ -100,6 +100,7 @@ pub mod EventBetting {
     enum Event {
         BetPlace: BetPlaced,
         Claim: BetClaimed,
+        EventTimeout: EventFinished,
     }
 
     #[derive(Drop, starknet::Event)]
@@ -113,6 +114,11 @@ pub mod EventBetting {
         event_name: felt252,
         amount_claimed: u256,
         event_outcome: u8,
+        timestamp: u64,
+    }
+
+    #[derive(Drop, starknet::Event)]
+    pub struct EventFinished {
         timestamp: u64,
     }
 
@@ -338,6 +344,10 @@ pub mod EventBetting {
         fn set_is_active(ref self: ContractState, is_active: bool) {
             assert(get_caller_address() == self.owner.read(), 'Only owner can do that');
             self.is_active.write(is_active);
+            if is_active == false {
+                let event = EventFinished { timestamp: get_block_timestamp() };
+                self.emit(Event::EventTimeout(event));
+            }
         }
 
         fn get_time_expiration(self: @ContractState) -> u256 {
