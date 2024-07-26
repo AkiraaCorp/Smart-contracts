@@ -9,7 +9,7 @@ pub trait IEventBetting<TContractState> {
         ref self: TContractState, user_address: ContractAddress, bet_amount: u256, bet: bool
     );
     fn get_bet(self: @TContractState, user_address: ContractAddress) -> EventBetting::UserBet;
-   //fn has_bet (self: @TContractState, user_address: ContractAddress) -> bool;
+    fn has_bet(self: @TContractState, user_address: ContractAddress) -> bool;
     fn get_event_probability(self: @TContractState) -> EventBetting::Odds;
     fn set_event_probability(
         ref self: TContractState, no_initial_prob: u256, yes_initial_prob: u256
@@ -50,8 +50,8 @@ pub mod EventBetting {
     use starknet::SyscallResultTrait;
     use starknet::storage_access::StorageBaseAddress;
     use starknet::{
-        ContractAddress, SyscallResult, Store, ClassHash,
-        get_caller_address, get_contract_address, get_block_timestamp, contract_address_const, 
+        ContractAddress, SyscallResult, Store, ClassHash, get_caller_address, get_contract_address,
+        get_block_timestamp, contract_address_const,
     };
     use super::super::super::ERC20::ERC20Contract;
 
@@ -87,7 +87,7 @@ pub mod EventBetting {
         claimable_amount: u256,
         user_odds: Odds,
     }
-    
+
     #[derive(Drop, Copy, Serde, starknet::Store, PartialEq, Eq, Hash)]
     pub struct Odds {
         pub no_probability: u256,
@@ -230,6 +230,7 @@ pub mod EventBetting {
             ref self: ContractState, user_address: ContractAddress, bet_amount: u256, bet: bool
         ) {
             assert(self.get_is_active() == true, 'This event is not active');
+            assert(self.has_bet(user_address) == false, 'User already bet');
             let odds = self.get_event_probability();
             let current_odds = Odds {
                 no_probability: odds.no_probability, yes_probability: odds.yes_probability
@@ -285,23 +286,32 @@ pub mod EventBetting {
             };
 
             refresh_event_odds(ref self, user_choice, total_user_share);
-            let address_to_felt: felt252 = user_address.try_into().expect('failed to convert address');
+            let address_to_felt: felt252 = user_address
+                .try_into()
+                .expect('failed to convert address');
             self.bets.write(address_to_felt, user_bet);
             let bet_event = BetPlaced { user_bet, timestamp: get_block_timestamp() };
             self.emit(Event::BetPlace(bet_event));
         }
 
         fn get_bet(self: @ContractState, user_address: ContractAddress) -> UserBet {
-            let address_to_felt: felt252 = user_address.try_into().expect('failed to convert address');
+            let address_to_felt: felt252 = user_address
+                .try_into()
+                .expect('failed to convert address');
             self.bets.read(address_to_felt)
         }
 
-        // fn has_bet(self: @ContractState, user_address: ContractAddress) -> bool {
-        //     let address_to_felt: felt252 = user_address.try_into().expect('failed to convert address');
-        //     let bet = self.bets.read(address_to_felt);
-        //     if bet {
-        //         true
-        //     }
+        fn has_bet(self: @ContractState, user_address: ContractAddress) -> bool {
+            let address_to_felt: felt252 = user_address
+                .try_into()
+                .expect('failed to convert address');
+            let bet = self.bets.read(address_to_felt);
+            if bet.amount == 0 {
+                true
+            } else {
+                false
+            }
+        }
 
         fn get_event_probability(self: @ContractState) -> Odds {
             self.event_probability.read()
@@ -340,7 +350,9 @@ pub mod EventBetting {
         }
 
         fn get_bet_per_user(self: @ContractState, user_address: ContractAddress) -> UserBet {
-            let address_to_felt: felt252 = user_address.try_into().expect('failed to convert address');
+            let address_to_felt: felt252 = user_address
+                .try_into()
+                .expect('failed to convert address');
             let bet = self.bets.read(address_to_felt);
             bet
         }
@@ -406,9 +418,7 @@ pub mod EventBetting {
 
                 //transfer STRK token to user
                 let strk_transfer = IERC20Dispatcher { contract_address: STRK_ADDRESS }
-                    .transfer_from(
-                        self.get_owner(), user_address, user_no_balance
-                    );
+                    .transfer_from(self.get_owner(), user_address, user_no_balance);
                 assert(strk_transfer == true, 'STRK transfer failed');
 
                 let claim_event = BetClaimed {
