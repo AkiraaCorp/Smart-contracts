@@ -1,1 +1,0 @@
-{"version":1,"contracts":[{"id":"jacerdt96sr0e","package_name":"erc_bet","contract_name":"YesToken","module_path":"erc_bet::YesToken","artifacts":{"sierra":"erc_bet_YesToken.contract_class.json","casm":"erc_bet_YesToken.compiled_contract_class.json"}}]}
