@@ -1,5 +1,5 @@
 #[starknet::contract]
-mod YesToken {
+mod NoToken {
     use openzeppelin::access::ownable::OwnableComponent;
     use openzeppelin::token::erc20::ERC20Component;
     use openzeppelin::token::erc20::ERC20HooksEmptyImpl;
@@ -45,7 +45,7 @@ mod YesToken {
 
     #[constructor]
     fn constructor(ref self: ContractState, owner: ContractAddress) {
-        self.erc20.initializer("YesToken", "YES");
+        self.erc20.initializer("NoToken", "NOT");
         self.ownable.initializer(owner);
     }
 

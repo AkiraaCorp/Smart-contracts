@@ -476,37 +476,46 @@ pub mod EventBetting {
 
     //internal function, no visibility from outside
     fn refresh_event_odds(ref self: ContractState, user_choice: bool, bet_amount: u256) {
-        ///si calcule trop sensible, on peut ajouter un alpha de 0.75-0.85 pour lisser
+        ///si calcule trop sensible, on peut ajouter un alpha de 0.75-0.85 pour lisser (1000000000000000000 = 1 STRK)
         let initial_yes_prob = self.get_event_probability().yes_probability;
         let initial_no_prob = self.get_event_probability().no_probability;
 
-        let bet_amt_fixed = bet_amount * 1000;
+        let scale_factor: u256 = 1000000000000000000; // 1e18
 
-        let mut total_yes = self.yes_total_amount.read();
-        let mut total_no = self.no_total_amount.read();
+        let total_yes = self.yes_total_amount.read();
+        let total_no = self.no_total_amount.read();
 
-        let initial_yes_amount = initial_yes_prob * 1000;
-        let initial_no_amount = initial_no_prob * 1000;
+        let initial_yes_amount = initial_yes_prob * scale_factor;
+        let initial_no_amount = initial_no_prob * scale_factor;
 
-        if user_choice {
-            total_yes += bet_amt_fixed;
+        let updated_total_yes = if user_choice {
+            total_yes + bet_amount
         } else {
-            total_no += bet_amt_fixed;
-        }
+            total_yes
+        };
 
-        let adjusted_total_yes = total_yes + initial_yes_amount;
-        let adjusted_total_no = total_no + initial_no_amount;
+        let updated_total_no = if !user_choice {
+            total_no + bet_amount
+        } else {
+            total_no
+        };
+
+        let adjusted_total_yes = updated_total_yes + initial_yes_amount;
+        let adjusted_total_no = updated_total_no + initial_no_amount;
 
         let adjusted_total_bet = adjusted_total_yes + adjusted_total_no;
 
         let new_yes_prob = (adjusted_total_yes * 10000) / adjusted_total_bet;
         let new_no_prob = (adjusted_total_no * 10000) / adjusted_total_bet;
 
-        let updated_odds = Odds { no_probability: new_no_prob, yes_probability: new_yes_prob, };
+        let updated_odds = Odds {
+            no_probability: new_no_prob, // Garder à l'échelle augmentée
+            yes_probability: new_yes_prob, // Garder à l'échelle augmentée
+        };
         self.event_probability.write(updated_odds);
 
-        self.yes_total_amount.write(total_yes);
-        self.no_total_amount.write(total_no);
+        self.yes_total_amount.write(updated_total_yes);
+        self.no_total_amount.write(updated_total_no);
     }
 }
 
