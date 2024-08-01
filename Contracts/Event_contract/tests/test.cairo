@@ -1,9 +1,7 @@
 use akira_smart_contract::ERC20::ERC20Contract::{
     IERC20ContractDispatcher, IERC20ContractDispatcherTrait
 };
-use akira_smart_contract::contracts::bet::EventBetting::{
-    to_u64, log_cost, cost_diff, from_u64, print_fixed
-};
+
 use akira_smart_contract::contracts::bet::{IEventBettingDispatcher, IEventBettingDispatcherTrait};
 use cubit::f64::{math::ops::{ln, exp}, types::fixed::{Fixed, FixedTrait}};
 use openzeppelin::token::erc20::interface::{ERC20ABI, ERC20ABIDispatcher, ERC20ABIDispatcherTrait};
@@ -59,19 +57,6 @@ mod test {
         IERC20ContractDispatcher, IERC20ContractDispatcherTrait
     };
 
-    // #[test]
-    // fn log_cost_pass() {
-
-    // }
-
-    // #[test]
-    // fn cost_diff_pass() {
-
-    // }
-
-    use akira_smart_contract::contracts::bet::EventBetting::{
-        to_u64, log_cost, cost_diff, from_u64, refresh_event_odds
-    };
     use akira_smart_contract::contracts::bet::{
         IEventBettingDispatcher, IEventBettingDispatcherTrait
     };

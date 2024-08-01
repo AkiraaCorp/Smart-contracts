@@ -56,7 +56,7 @@ pub mod EventBetting {
     use super::super::super::ERC20::ERC20Contract;
 
 
-    const PLATFORM_FEE: u256 = 7;
+    const PLATFORM_FEE: u256 = 2;
     #[storage]
     struct Storage {
         name: felt252,
@@ -269,8 +269,11 @@ pub mod EventBetting {
                 'transfer_from failed'
             ); //here just check if we use a bank wallet or maybe just send STRK directly on this contract or into ERC20 contracts
 
-            //MINT token to user
-            let total_user_share = bet_amount - (bet_amount * PLATFORM_FEE / 100);
+            let platform_fee_amount = bet_amount * PLATFORM_FEE / 100;
+
+            assert(bet_amount > platform_fee_amount, 'Bet amount too small');
+
+            let total_user_share = bet_amount - platform_fee_amount;
             dispatcher.mint(user_address, total_user_share);
 
             self.bets_count.write(self.bets_count.read() + 1);
@@ -313,9 +316,9 @@ pub mod EventBetting {
                 .expect('failed to convert address');
             let bet = self.bets.read(address_to_felt);
             if bet.amount == 0 {
-                true
-            } else {
                 false
+            } else {
+                true
             }
         }
 
