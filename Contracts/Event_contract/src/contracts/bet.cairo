@@ -14,6 +14,8 @@ pub trait IEventBetting<TContractState> {
     fn set_event_probability(
         ref self: TContractState, no_initial_prob: u256, yes_initial_prob: u256
     );
+    fn set_yes_token_address(ref self: TContractState, token_address: ContractAddress);
+    fn set_no_token_address(ref self: TContractState, token_address: ContractAddress);
     fn get_event_outcome(self: @TContractState) -> u8;
     fn get_is_active(self: @TContractState) -> bool;
     fn set_is_active(ref self: TContractState, is_active: bool);
@@ -264,10 +266,7 @@ pub mod EventBetting {
             //STRK deposit
             let stark_token = IERC20Dispatcher { contract_address: STRK_ADDRESS };
 
-            assert(
-                stark_token.transfer_from(user_address, self.bank_wallet.read(), bet_amount),
-                'transfer_from failed'
-            ); //here just check if we use a bank wallet or maybe just send STRK directly on this contract or into ERC20 contracts
+            stark_token.transfer_from(user_address, self.bank_wallet.read(), bet_amount);
 
             let platform_fee_amount = bet_amount * PLATFORM_FEE / 100;
 
@@ -334,6 +333,16 @@ pub mod EventBetting {
                 no_probability: no_initial_prob, yes_probability: yes_initial_prob
             };
             self.event_probability.write(initial_probibility);
+        }
+
+        fn set_yes_token_address(ref self: ContractState, token_address: ContractAddress) {
+            assert(get_caller_address() == self.owner.read(), 'Only owner can do that');
+            self.yes_share_token_address.write(token_address);
+        }
+
+        fn set_no_token_address(ref self: ContractState, token_address: ContractAddress) {
+            assert(get_caller_address() == self.owner.read(), 'Only owner can do that');
+            self.no_share_token_address.write(token_address);
         }
 
         fn get_event_outcome(self: @ContractState) -> u8 {
