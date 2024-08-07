@@ -47,8 +47,8 @@ pub mod EventBetting {
     use core::starknet::event::EventEmitter;
     use core::traits::TryInto;
     use cubit::f64::{math::ops::{ln, exp}, types::fixed::{Fixed, FixedTrait}};
-    use openzeppelin::token::erc20::interface::IERC20Dispatcher;
     use openzeppelin::token::erc20::interface::IERC20DispatcherTrait;
+    use openzeppelin::token::erc20::interface::{IERC20Dispatcher, IERC20CamelDispatcher};
     use starknet::SyscallResultTrait;
     use starknet::storage_access::StorageBaseAddress;
     use starknet::{
@@ -244,62 +244,99 @@ pub mod EventBetting {
                 no_probability: odds.no_probability, yes_probability: odds.yes_probability
             };
             let user_choice = bet;
-            let contract_address =
-                get_caller_address(); ///ici mettre une vraie addresse avec les tokens yes et no
-            let mut dispatcher = ERC20Contract::IERC20ContractDispatcher { contract_address };
             if user_choice == false {
-                dispatcher =
-                    ERC20Contract::IERC20ContractDispatcher {
-                        contract_address: self.no_share_token_address.read()
-                    };
+                let dispatcher = ERC20Contract::IERC20ContractDispatcher {
+                    contract_address: self.no_share_token_address.read()
+                };
+                let strk_address: ContractAddress =
+                    0x04718f5a0fc34cc1af16a1cdee98ffb20c31f5cd61d6ab07201858f4287c938d
+                    .try_into()
+                    .unwrap();
+                //STRK approve = le multicall et l'approve se font directement dans le front
+                //STRK deposit
+                let stark_token = IERC20Dispatcher { contract_address: strk_address };
+
+                stark_token.transfer_from(user_address, self.bank_wallet.read(), bet_amount);
+
+                let platform_fee_amount = bet_amount * PLATFORM_FEE / 100;
+
+                assert(bet_amount > platform_fee_amount, 'Bet amount too small');
+
+                let total_user_share = bet_amount - platform_fee_amount;
+                dispatcher.mint(user_address, total_user_share);
+
+                self.bets_count.write(self.bets_count.read() + 1);
+                self.total_bet_bank.write(self.total_bet_bank.read() + total_user_share);
+                let mut user_odds = current_odds.no_probability;
+                if user_choice == false {
+                    self.no_total_amount.write(self.no_total_amount.read() + total_user_share);
+                } else {
+                    user_odds = current_odds.yes_probability;
+                    self.yes_total_amount.write(self.yes_total_amount.read() + total_user_share);
+                }
+                let potential_reward = (total_user_share * 10000) / user_odds;
+                let user_bet = UserBet {
+                    bet: user_choice,
+                    amount: total_user_share,
+                    has_claimed: false,
+                    claimable_amount: potential_reward,
+                    user_odds: current_odds
+                };
+
+                refresh_event_odds(ref self, user_choice, total_user_share);
+                let address_to_felt: felt252 = user_address
+                    .try_into()
+                    .expect('failed to convert address');
+                self.bets.write(address_to_felt, user_bet);
+                let bet_event = BetPlaced { user_bet, timestamp: get_block_timestamp() };
+                self.emit(Event::BetPlace(bet_event));
             } else {
-                dispatcher =
-                    ERC20Contract::IERC20ContractDispatcher {
-                        contract_address: self.yes_share_token_address.read()
-                    };
+                let dispatcher = ERC20Contract::IERC20ContractDispatcher {
+                    contract_address: self.yes_share_token_address.read()
+                };
+                let strk_address: ContractAddress =
+                    0x04718f5a0fc34cc1af16a1cdee98ffb20c31f5cd61d6ab07201858f4287c938d
+                    .try_into()
+                    .unwrap();
+                //STRK approve = le multicall et l'approve se font directement dans le front
+                //STRK deposit
+                let stark_token = IERC20Dispatcher { contract_address: strk_address };
+
+                stark_token.transfer_from(user_address, self.bank_wallet.read(), bet_amount);
+
+                let platform_fee_amount = bet_amount * PLATFORM_FEE / 100;
+
+                assert(bet_amount > platform_fee_amount, 'Bet amount too small');
+
+                let total_user_share = bet_amount - platform_fee_amount;
+                dispatcher.mint(user_address, total_user_share);
+
+                self.bets_count.write(self.bets_count.read() + 1);
+                self.total_bet_bank.write(self.total_bet_bank.read() + total_user_share);
+                let mut user_odds = current_odds.no_probability;
+                if user_choice == false {
+                    self.no_total_amount.write(self.no_total_amount.read() + total_user_share);
+                } else {
+                    user_odds = current_odds.yes_probability;
+                    self.yes_total_amount.write(self.yes_total_amount.read() + total_user_share);
+                }
+                let potential_reward = (total_user_share * 10000) / user_odds;
+                let user_bet = UserBet {
+                    bet: user_choice,
+                    amount: total_user_share,
+                    has_claimed: false,
+                    claimable_amount: potential_reward,
+                    user_odds: current_odds
+                };
+
+                refresh_event_odds(ref self, user_choice, total_user_share);
+                let address_to_felt: felt252 = user_address
+                    .try_into()
+                    .expect('failed to convert address');
+                self.bets.write(address_to_felt, user_bet);
+                let bet_event = BetPlaced { user_bet, timestamp: get_block_timestamp() };
+                self.emit(Event::BetPlace(bet_event));
             }
-
-            let STRK_ADDRESS: ContractAddress = contract_address_const::<
-                0x04718f5a0fc34cc1af16a1cdee98ffb20c31f5cd61d6ab07201858f4287c938d
-            >();
-            //STRK approve = le multicall et l'approve se font directement dans le front
-            //STRK deposit
-            let stark_token = IERC20Dispatcher { contract_address: STRK_ADDRESS };
-
-            stark_token.transfer_from(user_address, self.bank_wallet.read(), bet_amount);
-
-            let platform_fee_amount = bet_amount * PLATFORM_FEE / 100;
-
-            assert(bet_amount > platform_fee_amount, 'Bet amount too small');
-
-            let total_user_share = bet_amount - platform_fee_amount;
-            dispatcher.mint(user_address, total_user_share);
-
-            self.bets_count.write(self.bets_count.read() + 1);
-            self.total_bet_bank.write(self.total_bet_bank.read() + total_user_share);
-            let mut user_odds = current_odds.no_probability;
-            if user_choice == false {
-                self.no_total_amount.write(self.no_total_amount.read() + total_user_share);
-            } else {
-                user_odds = current_odds.yes_probability;
-                self.yes_total_amount.write(self.yes_total_amount.read() + total_user_share);
-            }
-            let potential_reward = (total_user_share * 10000) / user_odds;
-            let user_bet = UserBet {
-                bet: user_choice,
-                amount: total_user_share,
-                has_claimed: false,
-                claimable_amount: potential_reward,
-                user_odds: current_odds
-            };
-
-            refresh_event_odds(ref self, user_choice, total_user_share);
-            let address_to_felt: felt252 = user_address
-                .try_into()
-                .expect('failed to convert address');
-            self.bets.write(address_to_felt, user_bet);
-            let bet_event = BetPlaced { user_bet, timestamp: get_block_timestamp() };
-            self.emit(Event::BetPlace(bet_event));
         }
 
         fn get_bet(self: @ContractState, user_address: ContractAddress) -> UserBet {
