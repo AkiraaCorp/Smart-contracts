@@ -14,6 +14,7 @@ pub trait IEventBetting<TContractState> {
     fn set_event_probability(
         ref self: TContractState, no_initial_prob: u256, yes_initial_prob: u256
     );
+    fn set_event_outcome(ref self: TContractState, event_result: bool);
     fn set_yes_token_address(ref self: TContractState, token_address: ContractAddress);
     fn set_no_token_address(ref self: TContractState, token_address: ContractAddress);
     fn get_event_outcome(self: @TContractState) -> u8;
@@ -370,6 +371,11 @@ pub mod EventBetting {
                 no_probability: no_initial_prob, yes_probability: yes_initial_prob
             };
             self.event_probability.write(initial_probibility);
+        }
+
+        fn set_event_outcome(ref self: TContractState, event_result: bool) {
+            assert(get_caller_address() == self.owner.read(), 'Only owner can do that');
+            self.event_outcome.write(event_result);
         }
 
         fn set_yes_token_address(ref self: ContractState, token_address: ContractAddress) {
