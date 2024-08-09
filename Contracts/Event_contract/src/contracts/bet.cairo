@@ -14,7 +14,7 @@ pub trait IEventBetting<TContractState> {
     fn set_event_probability(
         ref self: TContractState, no_initial_prob: u256, yes_initial_prob: u256
     );
-    fn set_event_outcome(ref self: TContractState, event_result: bool);
+    fn set_event_outcome(ref self: TContractState, event_result: u8);
     fn set_yes_token_address(ref self: TContractState, token_address: ContractAddress);
     fn set_no_token_address(ref self: TContractState, token_address: ContractAddress);
     fn get_event_outcome(self: @TContractState) -> u8;
@@ -373,7 +373,7 @@ pub mod EventBetting {
             self.event_probability.write(initial_probibility);
         }
 
-        fn set_event_outcome(ref self: TContractState, event_result: bool) {
+        fn set_event_outcome(ref self: ContractState, event_result: u8) {
             assert(get_caller_address() == self.owner.read(), 'Only owner can do that');
             self.event_outcome.write(event_result);
         }
@@ -460,7 +460,6 @@ pub mod EventBetting {
             balance
         }
 
-        ///Need to test this function ! (Charles review if possible)
         fn claim_reward(ref self: ContractState, user_address: ContractAddress) {
             assert(self.get_event_outcome() != 2, 'Event not finished yet');
             assert(get_caller_address() == user_address, 'Not allowed');
@@ -475,7 +474,7 @@ pub mod EventBetting {
                 }
                     .burn(
                         user_address, user_no_balance
-                    ); //check this line Maybe better to burn tokens
+                    ); 
 
                 let STRK_ADDRESS: ContractAddress = contract_address_const::<
                     0x04718f5a0fc34cc1af16a1cdee98ffb20c31f5cd61d6ab07201858f4287c938d
@@ -564,8 +563,8 @@ pub mod EventBetting {
         let new_no_prob = (adjusted_total_no * 10000) / adjusted_total_bet;
 
         let updated_odds = Odds {
-            no_probability: new_no_prob, // Garder à l'échelle augmentée
-            yes_probability: new_yes_prob, // Garder à l'échelle augmentée
+            no_probability: new_no_prob, 
+            yes_probability: new_yes_prob, 
         };
         self.event_probability.write(updated_odds);
 
