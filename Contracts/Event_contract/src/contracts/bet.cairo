@@ -264,7 +264,6 @@ pub mod EventBetting {
                 assert(bet_amount > platform_fee_amount, 'Bet amount too small');
 
                 let total_user_share = bet_amount - platform_fee_amount;
-                dispatcher.mint(user_address, total_user_share);
 
                 self.bets_count.write(self.bets_count.read() + 1);
                 self.total_bet_bank.write(self.total_bet_bank.read() + total_user_share);
@@ -276,6 +275,7 @@ pub mod EventBetting {
                     self.yes_total_amount.write(self.yes_total_amount.read() + total_user_share);
                 }
                 let potential_reward = (total_user_share * 10000) / user_odds;
+                dispatcher.mint(user_address, potential_reward);
                 let user_bet = UserBet {
                     bet: user_choice,
                     amount: total_user_share,
@@ -310,7 +310,6 @@ pub mod EventBetting {
                 assert(bet_amount > platform_fee_amount, 'Bet amount too small');
 
                 let total_user_share = bet_amount - platform_fee_amount;
-                dispatcher.mint(user_address, total_user_share);
 
                 self.bets_count.write(self.bets_count.read() + 1);
                 self.total_bet_bank.write(self.total_bet_bank.read() + total_user_share);
@@ -322,6 +321,7 @@ pub mod EventBetting {
                     self.yes_total_amount.write(self.yes_total_amount.read() + total_user_share);
                 }
                 let potential_reward = (total_user_share * 10000) / user_odds;
+                dispatcher.mint(user_address, potential_reward);
                 let user_bet = UserBet {
                     bet: user_choice,
                     amount: total_user_share,
@@ -472,9 +472,7 @@ pub mod EventBetting {
                 let transfer = ERC20Contract::IERC20ContractDispatcher {
                     contract_address: self.no_share_token_address.read()
                 }
-                    .burn(
-                        user_address, user_no_balance
-                    ); 
+                    .burn(user_address, user_no_balance);
 
                 let STRK_ADDRESS: ContractAddress = contract_address_const::<
                     0x04718f5a0fc34cc1af16a1cdee98ffb20c31f5cd61d6ab07201858f4287c938d
@@ -562,10 +560,7 @@ pub mod EventBetting {
         let new_yes_prob = (adjusted_total_yes * 10000) / adjusted_total_bet;
         let new_no_prob = (adjusted_total_no * 10000) / adjusted_total_bet;
 
-        let updated_odds = Odds {
-            no_probability: new_no_prob, 
-            yes_probability: new_yes_prob, 
-        };
+        let updated_odds = Odds { no_probability: new_no_prob, yes_probability: new_yes_prob, };
         self.event_probability.write(updated_odds);
 
         self.yes_total_amount.write(updated_total_yes);
