@@ -206,12 +206,8 @@ pub mod EventBetting {
                 self.bets_count.write(self.bets_count.read() + 1);
                 self.total_bet_bank.write(self.total_bet_bank.read() + total_user_share);
                 let mut user_odds = current_odds.no_probability;
-                if user_choice == false {
-                    self.no_total_amount.write(self.no_total_amount.read() + total_user_share);
-                } else {
-                    user_odds = current_odds.yes_probability;
-                    self.yes_total_amount.write(self.yes_total_amount.read() + total_user_share);
-                }
+                self.no_total_amount.write(self.no_total_amount.read() + total_user_share);
+        
                 let potential_reward = (total_user_share * 10000) / user_odds;
                 dispatcher.mint(user_address, potential_reward);
                 let user_bet = UserBet {
@@ -251,13 +247,9 @@ pub mod EventBetting {
 
                 self.bets_count.write(self.bets_count.read() + 1);
                 self.total_bet_bank.write(self.total_bet_bank.read() + total_user_share);
-                let mut user_odds = current_odds.no_probability;
-                if user_choice == false {
-                    self.no_total_amount.write(self.no_total_amount.read() + total_user_share);
-                } else {
-                    user_odds = current_odds.yes_probability;
-                    self.yes_total_amount.write(self.yes_total_amount.read() + total_user_share);
-                }
+                let user_odds = current_odds.yes_probability;
+                self.yes_total_amount.write(self.yes_total_amount.read() + total_user_share);
+                
                 let potential_reward = (total_user_share * 10000) / user_odds;
                 dispatcher.mint(user_address, potential_reward);
                 let user_bet = UserBet {
