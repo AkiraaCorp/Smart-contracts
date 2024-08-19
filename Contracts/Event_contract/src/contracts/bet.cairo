@@ -37,6 +37,7 @@ pub trait IEventBettingImpl<TContractState> {
     fn refresh_odds(self: @TContractState, odds: EventBetting::Odds) -> u256;
 }
 
+#[feature("deprecated_legacy_map")]
 #[starknet::contract]
 pub mod EventBetting {
     use akira_smart_contract::ERC20::ERC20Contract::IERC20ContractDispatcherTrait;
@@ -82,7 +83,7 @@ pub mod EventBetting {
         yes_share_token_address: ContractAddress,
     }
 
-    #[derive(Drop, Copy, Serde, starknet::Store, PartialEq, Eq, Hash)]
+    #[derive(Drop, Copy, Serde, starknet::Store, PartialEq, Hash)]
     pub struct UserBet {
         bet: bool, ///No = false, Yes = true
         amount: u256,
@@ -91,7 +92,7 @@ pub mod EventBetting {
         user_odds: Odds,
     }
 
-    #[derive(Drop, Copy, Serde, starknet::Store, PartialEq, Eq, Hash)]
+    #[derive(Drop, Copy, Serde, starknet::Store, PartialEq, Hash)]
     pub struct Odds {
         pub no_probability: u256,
         pub yes_probability: u256,
@@ -125,7 +126,7 @@ pub mod EventBetting {
         timestamp: u64,
     }
 
-    #[derive(Drop, Copy, Serde, starknet::Store, PartialEq, Eq, Hash)]
+    #[derive(Drop, Copy, Serde, starknet::Store, PartialEq, Hash)]
     pub enum RegistrationType {
         finite: u64,
         infinite
@@ -207,7 +208,7 @@ pub mod EventBetting {
                 self.total_bet_bank.write(self.total_bet_bank.read() + total_user_share);
                 let mut user_odds = current_odds.no_probability;
                 self.no_total_amount.write(self.no_total_amount.read() + total_user_share);
-        
+
                 let potential_reward = (total_user_share * 10000) / user_odds;
                 dispatcher.mint(user_address, potential_reward);
                 let user_bet = UserBet {
@@ -249,7 +250,7 @@ pub mod EventBetting {
                 self.total_bet_bank.write(self.total_bet_bank.read() + total_user_share);
                 let user_odds = current_odds.yes_probability;
                 self.yes_total_amount.write(self.yes_total_amount.read() + total_user_share);
-                
+
                 let potential_reward = (total_user_share * 10000) / user_odds;
                 dispatcher.mint(user_address, potential_reward);
                 let user_bet = UserBet {
@@ -458,7 +459,8 @@ pub mod EventBetting {
 
     //internal function, no visibility from outside
     fn refresh_event_odds(ref self: ContractState, user_choice: bool, bet_amount: u256) {
-        ///si calcule trop sensible, on peut ajouter un alpha de 0.75-0.85 pour lisser (1000000000000000000 = 1 STRK)
+        ///si calcule trop sensible, on peut ajouter un alpha de 0.75-0.85 pour lisser
+        ///(1000000000000000000 = 1 STRK)
         let initial_yes_prob = self.get_event_probability().yes_probability;
         let initial_no_prob = self.get_event_probability().no_probability;
 
