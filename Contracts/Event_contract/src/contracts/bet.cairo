@@ -17,6 +17,8 @@ pub trait IEventBetting<TContractState> {
     fn set_event_outcome(ref self: TContractState, event_result: u8);
     fn set_yes_token_address(ref self: TContractState, token_address: ContractAddress);
     fn set_no_token_address(ref self: TContractState, token_address: ContractAddress);
+    fn set_bank_wallet(ref self: TContractState, bank_wallet: ContractAddress);
+    fn set_fee_wallet(ref self: TContractState, fee_wallet: ContractAddress);
     fn get_event_outcome(self: @TContractState) -> u8;
     fn get_is_active(self: @TContractState) -> bool;
     fn set_is_active(ref self: TContractState, is_active: bool);
@@ -75,10 +77,11 @@ pub mod EventBetting {
         no_total_amount: u256,
         total_bet_bank: u256,
         bet_fee: u256,
-        event_outcome: u8, ///No = 0, Yes = 1 or 2 if event got no outcome yet
+        event_outcome: u8,
         is_active: bool,
         time_expiration: u256,
         bank_wallet: ContractAddress,
+        fee_wallet: ContractAddress,
         no_share_token_address: ContractAddress,
         yes_share_token_address: ContractAddress,
     }
@@ -140,6 +143,7 @@ pub mod EventBetting {
         token_no_address: ContractAddress,
         token_yes_adress: ContractAddress,
         bank_wallet: ContractAddress,
+        fee_wallet: ContractAddress,
         event_name: felt252
     ) {
         self.owner.write(owner);
@@ -199,6 +203,8 @@ pub mod EventBetting {
                 stark_token.transfer_from(user_address, self.bank_wallet.read(), bet_amount);
 
                 let platform_fee_amount = bet_amount * PLATFORM_FEE / 100;
+                stark_token
+                    .transfer_from(user_address, self.fee_wallet.read(), platform_fee_amount);
 
                 assert(bet_amount > platform_fee_amount, 'Bet amount too small');
 
@@ -241,6 +247,8 @@ pub mod EventBetting {
                 stark_token.transfer_from(user_address, self.bank_wallet.read(), bet_amount);
 
                 let platform_fee_amount = bet_amount * PLATFORM_FEE / 100;
+                stark_token
+                    .transfer_from(user_address, self.fee_wallet.read(), platform_fee_amount);
 
                 assert(bet_amount > platform_fee_amount, 'Bet amount too small');
 
@@ -317,6 +325,16 @@ pub mod EventBetting {
         fn set_no_token_address(ref self: ContractState, token_address: ContractAddress) {
             assert(get_caller_address() == self.owner.read(), 'Only owner can do that');
             self.no_share_token_address.write(token_address);
+        }
+
+        fn set_bank_wallet(ref self: ContractState, bank_wallet: ContractAddress) {
+            assert(get_caller_address() == self.owner.read(), 'Only owner can do that');
+            self.bank_wallet.write(bank_wallet);
+        }
+
+        fn set_fee_wallet(ref self: ContractState, fee_wallet: ContractAddress) {
+            assert(get_caller_address() == self.owner.read(), 'Only owner can do that');
+            self.fee_wallet.write(fee_wallet);
         }
 
         fn get_event_outcome(self: @ContractState) -> u8 {
