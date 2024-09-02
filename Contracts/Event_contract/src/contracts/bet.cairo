@@ -200,8 +200,6 @@ pub mod EventBetting {
                 //STRK deposit
                 let stark_token = IERC20Dispatcher { contract_address: strk_address };
 
-                stark_token.transfer_from(user_address, self.bank_wallet.read(), bet_amount);
-
                 let platform_fee_amount = bet_amount * PLATFORM_FEE / 100;
                 stark_token
                     .transfer_from(user_address, self.fee_wallet.read(), platform_fee_amount);
@@ -209,6 +207,10 @@ pub mod EventBetting {
                 assert(bet_amount > platform_fee_amount, 'Bet amount too small');
 
                 let total_user_share = bet_amount - platform_fee_amount;
+                stark_token
+                    .transfer_from(
+                        user_address, self.bank_wallet.read(), total_user_share
+                    ); 
 
                 self.bets_count.write(self.bets_count.read() + 1);
                 self.total_bet_bank.write(self.total_bet_bank.read() + total_user_share);
@@ -244,8 +246,6 @@ pub mod EventBetting {
                 //STRK deposit
                 let stark_token = IERC20Dispatcher { contract_address: strk_address };
 
-                stark_token.transfer_from(user_address, self.bank_wallet.read(), bet_amount);
-
                 let platform_fee_amount = bet_amount * PLATFORM_FEE / 100;
                 stark_token
                     .transfer_from(user_address, self.fee_wallet.read(), platform_fee_amount);
@@ -253,6 +253,7 @@ pub mod EventBetting {
                 assert(bet_amount > platform_fee_amount, 'Bet amount too small');
 
                 let total_user_share = bet_amount - platform_fee_amount;
+                stark_token.transfer_from(user_address, self.bank_wallet.read(), total_user_share);
 
                 self.bets_count.write(self.bets_count.read() + 1);
                 self.total_bet_bank.write(self.total_bet_bank.read() + total_user_share);
