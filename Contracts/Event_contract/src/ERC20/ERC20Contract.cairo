@@ -11,7 +11,7 @@ pub trait IERC20Contract<TContractState> {
     );
     fn mint(ref self: TContractState, recipient: ContractAddress, amount: u256);
     fn burn(ref self: TContractState, account: ContractAddress, amount: u256);
-    fn get_balance_of(ref self: TContractState, account: ContractAddress) -> u256;
+    fn balance_of(ref self: TContractState, account: ContractAddress) -> u256;
     fn supply_total(ref self: TContractState) -> u256;
 }
 
@@ -110,7 +110,7 @@ pub mod ERC20Contract {
             self.erc20.burn(account, amount);
         }
 
-        fn get_balance_of(ref self: ContractState, account: ContractAddress) -> u256 {
+        fn balance_of(ref self: ContractState, account: ContractAddress) -> u256 {
             self.erc20.ERC20_balances.read(account)
         }
 

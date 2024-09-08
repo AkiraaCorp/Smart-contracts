@@ -17,8 +17,6 @@ pub trait IEventBetting<TContractState> {
     fn set_event_outcome(ref self: TContractState, event_result: u8);
     fn set_yes_token_address(ref self: TContractState, token_address: ContractAddress);
     fn set_no_token_address(ref self: TContractState, token_address: ContractAddress);
-    fn set_bank_wallet(ref self: TContractState, bank_wallet: ContractAddress);
-    fn set_fee_wallet(ref self: TContractState, fee_wallet: ContractAddress);
     fn get_event_outcome(self: @TContractState) -> u8;
     fn get_is_active(self: @TContractState) -> bool;
     fn set_is_active(ref self: TContractState, is_active: bool);
@@ -32,6 +30,12 @@ pub trait IEventBetting<TContractState> {
     fn is_claimable(self: @TContractState, bet_to_claim: EventBetting::UserBet) -> bool;
     fn claimable_amount(self: @TContractState, user_address: ContractAddress) -> u256;
     fn claim_reward(ref self: TContractState, user_address: ContractAddress);
+    fn withdraw(
+        ref self: TContractState,
+        token_to_withdraw: ContractAddress,
+        recipient: ContractAddress,
+        amount: u256
+    ) -> bool;
 }
 
 pub trait IEventBettingImpl<TContractState> {
@@ -76,12 +80,9 @@ pub mod EventBetting {
         no_count: u128,
         no_total_amount: u256,
         total_bet_bank: u256,
-        bet_fee: u256,
         event_outcome: u8,
         is_active: bool,
         time_expiration: u256,
-        bank_wallet: ContractAddress,
-        fee_wallet: ContractAddress,
         no_share_token_address: ContractAddress,
         yes_share_token_address: ContractAddress,
     }
@@ -142,14 +143,11 @@ pub mod EventBetting {
         owner: ContractAddress,
         token_no_address: ContractAddress,
         token_yes_adress: ContractAddress,
-        bank_wallet: ContractAddress,
-        fee_wallet: ContractAddress,
         event_name: felt252
     ) {
         self.owner.write(owner);
         self.no_share_token_address.write(token_no_address);
         self.yes_share_token_address.write(token_yes_adress);
-        self.bank_wallet.write(bank_wallet);
         self.is_active.write(true);
         self.event_outcome.write(2);
         self.yes_count.write(0);
@@ -196,21 +194,11 @@ pub mod EventBetting {
                     0x04718f5a0fc34cc1af16a1cdee98ffb20c31f5cd61d6ab07201858f4287c938d
                     .try_into()
                     .unwrap();
-                //STRK approve = le multicall et l'approve se font directement dans le front
                 //STRK deposit
                 let stark_token = IERC20Dispatcher { contract_address: strk_address };
 
-                let platform_fee_amount = bet_amount * PLATFORM_FEE / 100;
-                stark_token
-                    .transfer_from(user_address, self.fee_wallet.read(), platform_fee_amount);
-
-                assert(bet_amount > platform_fee_amount, 'Bet amount too small');
-
-                let total_user_share = bet_amount - platform_fee_amount;
-                stark_token
-                    .transfer_from(
-                        user_address, self.bank_wallet.read(), total_user_share
-                    ); 
+                let total_user_share = bet_amount;
+                stark_token.transfer_from(user_address, self.get_owner(), total_user_share);
 
                 self.bets_count.write(self.bets_count.read() + 1);
                 self.total_bet_bank.write(self.total_bet_bank.read() + total_user_share);
@@ -242,18 +230,11 @@ pub mod EventBetting {
                     0x04718f5a0fc34cc1af16a1cdee98ffb20c31f5cd61d6ab07201858f4287c938d
                     .try_into()
                     .unwrap();
-                //STRK approve = le multicall et l'approve se font directement dans le front
                 //STRK deposit
                 let stark_token = IERC20Dispatcher { contract_address: strk_address };
 
-                let platform_fee_amount = bet_amount * PLATFORM_FEE / 100;
-                stark_token
-                    .transfer_from(user_address, self.fee_wallet.read(), platform_fee_amount);
-
-                assert(bet_amount > platform_fee_amount, 'Bet amount too small');
-
-                let total_user_share = bet_amount - platform_fee_amount;
-                stark_token.transfer_from(user_address, self.bank_wallet.read(), total_user_share);
+                let total_user_share = bet_amount;
+                stark_token.transfer_from(user_address, self.get_owner(), total_user_share);
 
                 self.bets_count.write(self.bets_count.read() + 1);
                 self.total_bet_bank.write(self.total_bet_bank.read() + total_user_share);
@@ -328,16 +309,6 @@ pub mod EventBetting {
             self.no_share_token_address.write(token_address);
         }
 
-        fn set_bank_wallet(ref self: ContractState, bank_wallet: ContractAddress) {
-            assert(get_caller_address() == self.owner.read(), 'Only owner can do that');
-            self.bank_wallet.write(bank_wallet);
-        }
-
-        fn set_fee_wallet(ref self: ContractState, fee_wallet: ContractAddress) {
-            assert(get_caller_address() == self.owner.read(), 'Only owner can do that');
-            self.fee_wallet.write(fee_wallet);
-        }
-
         fn get_event_outcome(self: @ContractState) -> u8 {
             self.event_outcome.read()
         }
@@ -396,14 +367,14 @@ pub mod EventBetting {
                 let user_no_balance = ERC20Contract::IERC20ContractDispatcher {
                     contract_address: self.no_share_token_address.read()
                 }
-                    .get_balance_of(user_address);
+                    .balance_of(user_address);
                 assert(user_no_balance > 0, 'No tokens to claim');
                 balance = user_no_balance;
             } else {
                 let user_yes_balance = ERC20Contract::IERC20ContractDispatcher {
                     contract_address: self.yes_share_token_address.read()
                 }
-                    .get_balance_of(user_address);
+                    .balance_of(user_address);
                 assert(user_yes_balance > 0, 'No tokens to claim');
                 balance = user_yes_balance;
             }
@@ -417,7 +388,7 @@ pub mod EventBetting {
                 let user_no_balance = ERC20Contract::IERC20ContractDispatcher {
                     contract_address: self.no_share_token_address.read()
                 }
-                    .get_balance_of(user_address);
+                    .balance_of(user_address);
                 assert(user_no_balance > 0, 'No tokens to exchange');
                 let transfer = ERC20Contract::IERC20ContractDispatcher {
                     contract_address: self.no_share_token_address.read()
@@ -430,7 +401,7 @@ pub mod EventBetting {
 
                 //transfer STRK token to user
                 let strk_transfer = IERC20Dispatcher { contract_address: STRK_ADDRESS }
-                    .transfer_from(self.get_owner(), user_address, user_no_balance);
+                    .transfer(user_address, user_no_balance);
                 assert(strk_transfer == true, 'STRK transfer failed');
 
                 let claim_event = BetClaimed {
@@ -446,7 +417,7 @@ pub mod EventBetting {
                 let user_yes_balance = ERC20Contract::IERC20ContractDispatcher {
                     contract_address: self.yes_share_token_address.read()
                 }
-                    .get_balance_of(user_address);
+                    .balance_of(user_address);
                 assert(user_yes_balance > 0, 'No tokens to exchange');
 
                 let transfer = ERC20Contract::IERC20ContractDispatcher {
@@ -460,11 +431,8 @@ pub mod EventBetting {
 
                 //transfer STRK token to user
                 let strk_transfer = IERC20Dispatcher { contract_address: STRK_ADDRESS }
-                    .transfer_from(
-                        self.get_owner(), user_address, user_yes_balance
-                    ); //check this line  
+                    .transfer(user_address, user_yes_balance);
                 assert(strk_transfer == true, 'STRK transfer failed');
-                //let bet_event = BetPlaced { user_bet, timestamp: get_block_timestamp() };
                 let claim_event = BetClaimed {
                     event_name: self.get_name(),
                     amount_claimed: user_yes_balance,
@@ -473,6 +441,17 @@ pub mod EventBetting {
                 };
                 self.emit(Event::Claim(claim_event));
             }
+        }
+
+        fn withdraw(
+            ref self: ContractState,
+            token_to_withdraw: ContractAddress,
+            recipient: ContractAddress,
+            amount: u256
+        ) -> bool {
+            let owner = self.owner.read();
+            assert(get_caller_address() == owner, 'Only owner can proceed');
+            IERC20Dispatcher { contract_address: token_to_withdraw }.transfer(recipient, amount)
         }
     }
 
