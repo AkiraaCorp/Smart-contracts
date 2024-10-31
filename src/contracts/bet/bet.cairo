@@ -1,78 +1,28 @@
-use starknet::ContractAddress;
-
-#[starknet::interface]
-pub trait IEventBetting<TContractState> {
-    fn store_name(ref self: TContractState, name: felt252);
-    fn get_name(self: @TContractState) -> felt252;
-    fn get_owner(self: @TContractState) -> ContractAddress;
-    fn place_bet(
-        ref self: TContractState, user_address: ContractAddress, bet_amount: u256, bet: bool
-    );
-    fn get_bet(self: @TContractState, user_address: ContractAddress) -> EventBetting::UserBet;
-    fn has_bet(self: @TContractState, user_address: ContractAddress) -> bool;
-    fn get_event_probability(self: @TContractState) -> EventBetting::Odds;
-    fn set_event_probability(
-        ref self: TContractState, no_initial_prob: u256, yes_initial_prob: u256
-    );
-    fn set_event_outcome(ref self: TContractState, event_result: u8);
-    fn set_yes_token_address(ref self: TContractState, token_address: ContractAddress);
-    fn set_no_token_address(ref self: TContractState, token_address: ContractAddress);
-    fn get_event_outcome(self: @TContractState) -> u8;
-    fn get_is_active(self: @TContractState) -> bool;
-    fn set_is_active(ref self: TContractState, is_active: bool);
-    fn get_time_expiration(self: @TContractState) -> u256;
-    fn set_time_expiration(ref self: TContractState, time_expiration: u256);
-    fn get_bet_per_user(
-        self: @TContractState, user_address: ContractAddress
-    ) -> EventBetting::UserBet;
-    fn get_total_bet_bank(self: @TContractState) -> u256;
-
-    fn is_claimable(self: @TContractState, bet_to_claim: EventBetting::UserBet) -> bool;
-    fn claimable_amount(self: @TContractState, user_address: ContractAddress) -> u256;
-    fn claim_reward(ref self: TContractState, user_address: ContractAddress);
-    fn withdraw(
-        ref self: TContractState,
-        token_to_withdraw: ContractAddress,
-        recipient: ContractAddress,
-        amount: u256
-    ) -> bool;
-}
-
-pub trait IEventBettingImpl<TContractState> {
-    fn bet_is_over(self: @TContractState) -> bool;
-    fn refresh_odds(self: @TContractState, odds: EventBetting::Odds) -> u256;
-}
-
-#[feature("deprecated_legacy_map")]
 #[starknet::contract]
 pub mod EventBetting {
-    use akira_smart_contract::ERC20::ERC20Contract::IERC20ContractDispatcherTrait;
-    use akira_smart_contract::contracts::bet::IEventBetting;
+    use akira::contracts::bet::interface::{IEventBetting, UserBet, Odds};
+    use akira::contracts::voting_token::interface::{IVotingTokenDispatcher, IVotingTokenDispatcherTrait};
     use core::array::ArrayTrait;
-    use core::box::BoxTrait;
     use core::num::traits::zero::Zero;
     use core::option::OptionTrait;
     use core::starknet::event::EventEmitter;
     use core::traits::TryInto;
-    use cubit::f64::{math::ops::{ln, exp}, types::fixed::{Fixed, FixedTrait}};
-    use openzeppelin::token::erc20::interface::IERC20DispatcherTrait;
-    use openzeppelin::token::erc20::interface::{IERC20Dispatcher, IERC20CamelDispatcher};
-    use starknet::SyscallResultTrait;
-    use starknet::storage_access::StorageBaseAddress;
+    use openzeppelin::token::erc20::interface::{IERC20Dispatcher, IERC20DispatcherTrait};
+    use starknet::storage::Map;
+    use starknet::storage::StoragePathEntry;
+    use starknet::storage::{StoragePointerReadAccess, StoragePointerWriteAccess, Vec, VecTrait, MutableVecTrait};
     use starknet::{
-        ContractAddress, SyscallResult, Store, ClassHash, get_caller_address, get_contract_address,
-        get_block_timestamp, contract_address_const,
+        ContractAddress, ClassHash, get_caller_address, get_contract_address, get_block_timestamp,
+        contract_address_const, syscalls
     };
-    use super::super::super::ERC20::ERC20Contract;
 
-
-    const PLATFORM_FEE: u256 = 2;
+    const BET_LIMIT: u256 = 1000000000000000000000; //1000 STARK
     #[storage]
     struct Storage {
         name: felt252,
         owner: ContractAddress,
         total_names: u128,
-        bets: LegacyMap<felt252, UserBet>,
+        bets: Map<felt252, Vec<UserBet>>,
         bets_count: u32,
         event_probability: Odds,
         yes_count: u128,
@@ -87,21 +37,6 @@ pub mod EventBetting {
         yes_share_token_address: ContractAddress,
     }
 
-    #[derive(Drop, Copy, Serde, starknet::Store, PartialEq, Hash)]
-    pub struct UserBet {
-        bet: bool, ///No = false, Yes = true
-        amount: u256,
-        has_claimed: bool,
-        claimable_amount: u256,
-        user_odds: Odds,
-    }
-
-    #[derive(Drop, Copy, Serde, starknet::Store, PartialEq, Hash)]
-    pub struct Odds {
-        pub no_probability: u256,
-        pub yes_probability: u256,
-    }
-
     // events
     #[event]
     #[derive(Drop, starknet::Event)]
@@ -114,12 +49,14 @@ pub mod EventBetting {
     #[derive(Drop, starknet::Event)]
     pub struct BetPlaced {
         user_bet: UserBet,
+        user_address: ContractAddress,
         timestamp: u64,
     }
 
     #[derive(Drop, starknet::Event)]
     pub struct BetClaimed {
-        event_name: felt252,
+        event_address: ContractAddress,
+        user_address: ContractAddress,
         amount_claimed: u256,
         event_outcome: u8,
         timestamp: u64,
@@ -127,6 +64,8 @@ pub mod EventBetting {
 
     #[derive(Drop, starknet::Event)]
     pub struct EventFinished {
+        event_address: ContractAddress,
+        event_outcome: u8,
         timestamp: u64,
     }
 
@@ -135,7 +74,6 @@ pub mod EventBetting {
         finite: u64,
         infinite
     }
-
 
     #[constructor]
     fn constructor(
@@ -162,7 +100,7 @@ pub mod EventBetting {
     }
 
     #[abi(embed_v0)]
-    impl EventBetting of super::IEventBetting<ContractState> {
+    impl EventBetting of IEventBetting<ContractState> {
         fn store_name(ref self: ContractState, name: felt252) {
             assert(get_caller_address() == self.owner.read(), 'Only owner can do that');
             self.name.write(name);
@@ -176,22 +114,16 @@ pub mod EventBetting {
             self.owner.read()
         }
 
-        fn place_bet(
-            ref self: ContractState, user_address: ContractAddress, bet_amount: u256, bet: bool
-        ) {
+        fn place_bet(ref self: ContractState, user_address: ContractAddress, bet_amount: u256, bet: bool) {
             assert(self.get_is_active() == true, 'This event is not active');
-            assert(self.has_bet(user_address) == false, 'User already bet');
+            assert(self.has_bet_limit(user_address, bet_amount) == false, 'User already bet to limit');
+            assert(self.get_event_outcome() == 2, 'Event already finished');
             let odds = self.get_event_probability();
-            let current_odds = Odds {
-                no_probability: odds.no_probability, yes_probability: odds.yes_probability
-            };
+            let current_odds = Odds { no_probability: odds.no_probability, yes_probability: odds.yes_probability };
             let user_choice = bet;
             if user_choice == false {
-                let dispatcher = ERC20Contract::IERC20ContractDispatcher {
-                    contract_address: self.no_share_token_address.read()
-                };
-                let strk_address: ContractAddress =
-                    0x04718f5a0fc34cc1af16a1cdee98ffb20c31f5cd61d6ab07201858f4287c938d
+                let dispatcher = IVotingTokenDispatcher { contract_address: self.no_share_token_address.read() };
+                let strk_address: ContractAddress = 0x04718f5a0fc34cc1af16a1cdee98ffb20c31f5cd61d6ab07201858f4287c938d
                     .try_into()
                     .unwrap();
                 //STRK deposit
@@ -215,19 +147,13 @@ pub mod EventBetting {
                     user_odds: current_odds
                 };
 
-                refresh_event_odds(ref self, user_choice, total_user_share);
-                let address_to_felt: felt252 = user_address
-                    .try_into()
-                    .expect('failed to convert address');
-                self.bets.write(address_to_felt, user_bet);
-                let bet_event = BetPlaced { user_bet, timestamp: get_block_timestamp() };
-                self.emit(Event::BetPlace(bet_event));
+                self._refresh_event_odds(user_choice, total_user_share);
+                let address_to_felt: felt252 = user_address.try_into().expect('failed to convert address');
+                self.bets.entry(address_to_felt).append().write(user_bet);
+                self.emit(Event::BetPlace(BetPlaced { user_bet, user_address, timestamp: get_block_timestamp() }));
             } else {
-                let dispatcher = ERC20Contract::IERC20ContractDispatcher {
-                    contract_address: self.yes_share_token_address.read()
-                };
-                let strk_address: ContractAddress =
-                    0x04718f5a0fc34cc1af16a1cdee98ffb20c31f5cd61d6ab07201858f4287c938d
+                let dispatcher = IVotingTokenDispatcher { contract_address: self.yes_share_token_address.read() };
+                let strk_address: ContractAddress = 0x04718f5a0fc34cc1af16a1cdee98ffb20c31f5cd61d6ab07201858f4287c938d
                     .try_into()
                     .unwrap();
                 //STRK deposit
@@ -251,29 +177,45 @@ pub mod EventBetting {
                     user_odds: current_odds
                 };
 
-                refresh_event_odds(ref self, user_choice, total_user_share);
-                let address_to_felt: felt252 = user_address
-                    .try_into()
-                    .expect('failed to convert address');
-                self.bets.write(address_to_felt, user_bet);
-                let bet_event = BetPlaced { user_bet, timestamp: get_block_timestamp() };
-                self.emit(Event::BetPlace(bet_event));
+                self._refresh_event_odds(user_choice, total_user_share);
+                let address_to_felt: felt252 = user_address.try_into().expect('failed to convert address');
+                self.bets.entry(address_to_felt).append().write(user_bet);
+                self.emit(Event::BetPlace(BetPlaced { user_bet, user_address, timestamp: get_block_timestamp() }));
             }
         }
 
-        fn get_bet(self: @ContractState, user_address: ContractAddress) -> UserBet {
-            let address_to_felt: felt252 = user_address
-                .try_into()
-                .expect('failed to convert address');
-            self.bets.read(address_to_felt)
+        fn get_bet(self: @ContractState, user_address: ContractAddress) -> Array<UserBet> {
+            let address_to_felt: felt252 = user_address.try_into().expect('failed to convert address');
+            let bets = self.bets.entry(address_to_felt);
+            let mut bet_array: Array<UserBet> = array![];
+            let vec_lenght = bets.len();
+            let mut i = 0;
+            loop {
+                if i >= vec_lenght {
+                    break;
+                }
+                let at_index = bets.at(i).read();
+                bet_array.append(at_index);
+            };
+            bet_array
         }
 
-        fn has_bet(self: @ContractState, user_address: ContractAddress) -> bool {
-            let address_to_felt: felt252 = user_address
-                .try_into()
-                .expect('failed to convert address');
-            let bet = self.bets.read(address_to_felt);
-            if bet.amount == 0 {
+        fn has_bet_limit(self: @ContractState, user_address: ContractAddress, bet_amount: u256) -> bool {
+            let address_to_felt: felt252 = user_address.try_into().expect('failed to convert address');
+            let bets = self.bets.entry(address_to_felt);
+            let vec_lenght = bets.len();
+            let mut total_amount: u256 = 0;
+            let mut i = 0;
+            loop {
+                if i >= vec_lenght {
+                    break;
+                }
+                let at_index = bets.at(i).amount.read();
+                total_amount = total_amount + at_index;
+                i = i + 1;
+            };
+            let new_total_amount = total_amount + bet_amount;
+            if (new_total_amount <= BET_LIMIT) {
                 false
             } else {
                 true
@@ -284,19 +226,19 @@ pub mod EventBetting {
             self.event_probability.read()
         }
 
-        fn set_event_probability(
-            ref self: ContractState, no_initial_prob: u256, yes_initial_prob: u256
-        ) {
+        fn set_event_probability(ref self: ContractState, no_initial_prob: u256, yes_initial_prob: u256) {
             assert(get_caller_address() == self.owner.read(), 'Only owner can do that');
-            let initial_probibility = Odds {
-                no_probability: no_initial_prob, yes_probability: yes_initial_prob
-            };
+            let initial_probibility = Odds { no_probability: no_initial_prob, yes_probability: yes_initial_prob };
             self.event_probability.write(initial_probibility);
         }
 
         fn set_event_outcome(ref self: ContractState, event_result: u8) {
             assert(get_caller_address() == self.owner.read(), 'Only owner can do that');
             self.event_outcome.write(event_result);
+            if event_result != 2 {
+                let event = EventFinished { timestamp: get_block_timestamp(), event_outcome: event_result, event_address: get_contract_address() };
+                self.emit(Event::EventTimeout(event));
+            }
         }
 
         fn set_yes_token_address(ref self: ContractState, token_address: ContractAddress) {
@@ -320,10 +262,6 @@ pub mod EventBetting {
         fn set_is_active(ref self: ContractState, is_active: bool) {
             assert(get_caller_address() == self.owner.read(), 'Only owner can do that');
             self.is_active.write(is_active);
-            if is_active == false {
-                let event = EventFinished { timestamp: get_block_timestamp() };
-                self.emit(Event::EventTimeout(event));
-            }
         }
 
         fn get_time_expiration(self: @ContractState) -> u256 {
@@ -333,14 +271,6 @@ pub mod EventBetting {
         fn set_time_expiration(ref self: ContractState, time_expiration: u256) {
             assert(get_caller_address() == self.owner.read(), 'Only owner can do that');
             self.time_expiration.write(time_expiration);
-        }
-
-        fn get_bet_per_user(self: @ContractState, user_address: ContractAddress) -> UserBet {
-            let address_to_felt: felt252 = user_address
-                .try_into()
-                .expect('failed to convert address');
-            let bet = self.bets.read(address_to_felt);
-            bet
         }
 
         fn get_total_bet_bank(self: @ContractState) -> u256 {
@@ -364,16 +294,12 @@ pub mod EventBetting {
             assert(event_outcome != 2, 'No outcome yet');
             let mut balance = 0;
             if event_outcome == 0 {
-                let user_no_balance = ERC20Contract::IERC20ContractDispatcher {
-                    contract_address: self.no_share_token_address.read()
-                }
+                let user_no_balance = IVotingTokenDispatcher { contract_address: self.no_share_token_address.read() }
                     .balance_of(user_address);
                 assert(user_no_balance > 0, 'No tokens to claim');
                 balance = user_no_balance;
             } else {
-                let user_yes_balance = ERC20Contract::IERC20ContractDispatcher {
-                    contract_address: self.yes_share_token_address.read()
-                }
+                let user_yes_balance = IVotingTokenDispatcher { contract_address: self.yes_share_token_address.read() }
                     .balance_of(user_address);
                 assert(user_yes_balance > 0, 'No tokens to claim');
                 balance = user_yes_balance;
@@ -381,18 +307,20 @@ pub mod EventBetting {
             balance
         }
 
+        fn upgrade(ref self: ContractState, new_class_hash: ClassHash) {
+            assert(get_caller_address() == self.owner.read(), 'Only owner can do that');
+            assert(!new_class_hash.is_zero(), 'Class hash cannot be zero');
+            syscalls::replace_class_syscall(new_class_hash).unwrap();
+        }
+
         fn claim_reward(ref self: ContractState, user_address: ContractAddress) {
             assert(self.get_event_outcome() != 2, 'Event not finished yet');
             assert(get_caller_address() == user_address, 'Not allowed');
             if self.get_event_outcome() == 0 {
-                let user_no_balance = ERC20Contract::IERC20ContractDispatcher {
-                    contract_address: self.no_share_token_address.read()
-                }
+                let user_no_balance = IVotingTokenDispatcher { contract_address: self.no_share_token_address.read() }
                     .balance_of(user_address);
                 assert(user_no_balance > 0, 'No tokens to exchange');
-                let transfer = ERC20Contract::IERC20ContractDispatcher {
-                    contract_address: self.no_share_token_address.read()
-                }
+                IVotingTokenDispatcher { contract_address: self.no_share_token_address.read() }
                     .burn(user_address, user_no_balance);
 
                 let STRK_ADDRESS: ContractAddress = contract_address_const::<
@@ -405,7 +333,8 @@ pub mod EventBetting {
                 assert(strk_transfer == true, 'STRK transfer failed');
 
                 let claim_event = BetClaimed {
-                    event_name: self.get_name(),
+                    event_address: get_contract_address(),
+                    user_address: user_address,
                     amount_claimed: user_no_balance,
                     event_outcome: self.get_event_outcome(),
                     timestamp: get_block_timestamp()
@@ -414,15 +343,11 @@ pub mod EventBetting {
             }
 
             if self.get_event_outcome() == 1 {
-                let user_yes_balance = ERC20Contract::IERC20ContractDispatcher {
-                    contract_address: self.yes_share_token_address.read()
-                }
+                let user_yes_balance = IVotingTokenDispatcher { contract_address: self.yes_share_token_address.read() }
                     .balance_of(user_address);
                 assert(user_yes_balance > 0, 'No tokens to exchange');
 
-                let transfer = ERC20Contract::IERC20ContractDispatcher {
-                    contract_address: self.yes_share_token_address.read()
-                }
+                IVotingTokenDispatcher { contract_address: self.yes_share_token_address.read() }
                     .burn(user_address, user_yes_balance);
 
                 let STRK_ADDRESS: ContractAddress = contract_address_const::<
@@ -434,7 +359,8 @@ pub mod EventBetting {
                     .transfer(user_address, user_yes_balance);
                 assert(strk_transfer == true, 'STRK transfer failed');
                 let claim_event = BetClaimed {
-                    event_name: self.get_name(),
+                    event_address: get_contract_address(),
+                    user_address: user_address,
                     amount_claimed: user_yes_balance,
                     event_outcome: self.get_event_outcome(),
                     timestamp: get_block_timestamp()
@@ -444,10 +370,7 @@ pub mod EventBetting {
         }
 
         fn withdraw(
-            ref self: ContractState,
-            token_to_withdraw: ContractAddress,
-            recipient: ContractAddress,
-            amount: u256
+            ref self: ContractState, token_to_withdraw: ContractAddress, recipient: ContractAddress, amount: u256
         ) -> bool {
             let owner = self.owner.read();
             assert(get_caller_address() == owner, 'Only owner can proceed');
@@ -456,45 +379,46 @@ pub mod EventBetting {
     }
 
     //internal function, no visibility from outside
-    fn refresh_event_odds(ref self: ContractState, user_choice: bool, bet_amount: u256) {
-        ///si calcule trop sensible, on peut ajouter un alpha de 0.75-0.85 pour lisser
-        ///(1000000000000000000 = 1 STRK)
-        let initial_yes_prob = self.get_event_probability().yes_probability;
-        let initial_no_prob = self.get_event_probability().no_probability;
+    #[generate_trait]
+    impl InternalImpl of InternalTrait {
+        fn _refresh_event_odds(ref self: ContractState, user_choice: bool, bet_amount: u256) {
+            ///si calcule trop sensible, on peut ajouter un alpha de 0.75-0.85 pour lisser
+            let initial_yes_prob = self.get_event_probability().yes_probability;
+            let initial_no_prob = self.get_event_probability().no_probability;
 
-        let scale_factor: u256 = 1000000000000000000; // 1e18
+            let scale_factor: u256 = 1_000_000_000_000_000_000; // 1e18 (1000000000000000000 = 1 STRK)
 
-        let total_yes = self.yes_total_amount.read();
-        let total_no = self.no_total_amount.read();
+            let total_yes = self.yes_total_amount.read();
+            let total_no = self.no_total_amount.read();
 
-        let initial_yes_amount = initial_yes_prob * scale_factor;
-        let initial_no_amount = initial_no_prob * scale_factor;
+            let initial_yes_amount = initial_yes_prob * scale_factor;
+            let initial_no_amount = initial_no_prob * scale_factor;
 
-        let updated_total_yes = if user_choice {
-            total_yes + bet_amount
-        } else {
-            total_yes
-        };
+            let updated_total_yes = if user_choice {
+                total_yes + bet_amount
+            } else {
+                total_yes
+            };
 
-        let updated_total_no = if !user_choice {
-            total_no + bet_amount
-        } else {
-            total_no
-        };
+            let updated_total_no = if !user_choice {
+                total_no + bet_amount
+            } else {
+                total_no
+            };
 
-        let adjusted_total_yes = updated_total_yes + initial_yes_amount;
-        let adjusted_total_no = updated_total_no + initial_no_amount;
+            let adjusted_total_yes = updated_total_yes + initial_yes_amount;
+            let adjusted_total_no = updated_total_no + initial_no_amount;
 
-        let adjusted_total_bet = adjusted_total_yes + adjusted_total_no;
+            let adjusted_total_bet = adjusted_total_yes + adjusted_total_no;
 
-        let new_yes_prob = (adjusted_total_yes * 10000) / adjusted_total_bet;
-        let new_no_prob = (adjusted_total_no * 10000) / adjusted_total_bet;
+            let new_yes_prob = (adjusted_total_yes * 10000) / adjusted_total_bet;
+            let new_no_prob = (adjusted_total_no * 10000) / adjusted_total_bet;
 
-        let updated_odds = Odds { no_probability: new_no_prob, yes_probability: new_yes_prob, };
-        self.event_probability.write(updated_odds);
+            let updated_odds = Odds { no_probability: new_no_prob, yes_probability: new_yes_prob, };
+            self.event_probability.write(updated_odds);
 
-        self.yes_total_amount.write(updated_total_yes);
-        self.no_total_amount.write(updated_total_no);
+            self.yes_total_amount.write(updated_total_yes);
+            self.no_total_amount.write(updated_total_no);
+        }
     }
 }
-
