@@ -1,6 +1,6 @@
 #[starknet::contract]
 pub mod EventBetting {
-    use akira::contracts::bet::interface::{IEventBetting, UserBet, Odds};
+    use akira::contracts::bet::interface::{IEventBetting, UserBet};
     use akira::contracts::voting_token::interface::{IVotingTokenDispatcher, IVotingTokenDispatcherTrait};
     use core::array::ArrayTrait;
     use core::num::traits::zero::Zero;
@@ -24,14 +24,14 @@ pub mod EventBetting {
         total_names: u128,
         bets: Map<felt252, Vec<UserBet>>,
         bets_count: u32,
-        event_probability: Array<u64>,
+        event_probability: Vec<u64>,
         options_number: u8,
-        total_amount_per_option: Array<u256>,
+        total_amount_per_option: Vec<u256>,
         total_bet_bank: u256,
         event_outcome: u8,
         is_active: bool,
         time_expiration: u256,
-        token_addresses: Array<ContractAddress>,
+        token_addresses: Vec<ContractAddress>,
     }
 
     // events
@@ -81,15 +81,32 @@ pub mod EventBetting {
         option_number: u8,
     ) {
         self.owner.write(owner);
-        self.token_addresses.write(token_addresses);
         self.is_active.write(true);
         self.event_outcome.write(0);
-        self.total_amount_per_option.write(0);
         self.total_names.write(0);
         self.bets_count.write(0);
-        let probability = Array::new(option_number);
-        self.event_probability.write(probability);
         self.name.write(event_name);
+        let mut addresses: Array<ContractAddress> = array![];
+        let lenght = token_addresses.len();
+        let mut i = 0;
+        loop {
+            if i >= lenght {
+                break;
+            }
+            let token = *token_addresses.at(i);
+            self.token_addresses.append().write(token);
+            i = i + 1;
+        };
+
+        let mut i = 0;
+        loop {
+            if i >= option_number {
+                break;
+            }
+            self.total_amount_per_option.append().write(0);
+            self.event_probability.append().write(0);
+            i = i + 1;
+        };                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      
     }
 
     #[abi(embed_v0)]
@@ -111,22 +128,23 @@ pub mod EventBetting {
             assert(self.get_is_active() == true, 'This event is not active');
             assert(self.has_bet_limit(user_address, bet_amount) == false, 'User already bet to limit');
             assert(bet != 0, 'not a valid bet');
-            let odds = self.get_event_probability();
+            let bet_choice: u64 = bet.try_into().unwrap();
             let current_odds = self.get_event_probability();
             let user_choice = bet;
-            let dispatcher = IVotingTokenDispatcher { contract_address: self.token_addresses.get(bet).read() };
+            let dispatcher = IVotingTokenDispatcher { contract_address: self.token_addresses.at(bet_choice).read() };
             let strk_address: ContractAddress = 0x04718f5a0fc34cc1af16a1cdee98ffb20c31f5cd61d6ab07201858f4287c938d
                 .try_into()
                 .unwrap();
 
             let stark_token = IERC20Dispatcher { contract_address: strk_address };
             let total_user_share = bet_amount;
-            stark_token.transfer_from(user_address, self.get_contract_address(), total_user_share);
+            stark_token.transfer_from(user_address, get_contract_address(), total_user_share);
 
             self.bets_count.write(self.bets_count.read() + 1);
-            self.total_bet_bank.write(self.total_bet_bank.read() + total_user_share);
-            let mut user_odds = current_odds.get(bet);
-            let potential_reward = (total_user_share * 10000) / user_odds;
+            let odds_choice: u32 = bet.try_into().unwrap();
+            let mut user_odds = current_odds.at(odds_choice);
+            let odds: u256 = (*user_odds).try_into().unwrap();
+            let potential_reward = (total_user_share * 10000) / odds;
             dispatcher.mint(user_address, potential_reward);
             let user_bet = UserBet {
                 bet: user_choice,
@@ -179,6 +197,18 @@ pub mod EventBetting {
         }
 
         fn get_event_probability(self: @ContractState) -> Array<u64> {
+            let mut probability_array = array![];
+            let mut i: u64 = 0;
+            let lenght = self.options_number;
+            loop {
+                if i >= lenght {
+                    break;
+                }
+                let at_index = self.event_probability.at(i).read();
+                probability_array.append(at_index);
+                i = i + 1;
+            };
+
             self.event_probability.read()
         }
 
